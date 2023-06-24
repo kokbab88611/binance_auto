@@ -1,26 +1,3 @@
-from numba import jit, cuda
-import numpy as np
-# to measure exec time
-from timeit import default_timer as timer
-
-# normal function to run on cpu
-def func(a):								
-	for i in range(10000000):
-		a[i]+= 1	
-
-# function optimized to run on gpu
-@jit(target_backend='cuda')						
-def func2(a):
-	for i in range(10000000):
-		a[i]+= 1
-if __name__=="__main__":
-	n = 10000000							
-	a = np.ones(n, dtype = np.float64)
-	
-	start = timer()
-	func(a)
-	print("without GPU:", timer()-start)	
-	
-	start = timer()
-	func2(a)
-	print("with GPU:", timer()-start)
+import os 
+os.environ["Bin_API_KEY"] = "q4VWoBc1oXblQ32ORbrDIb0O2vnXczXYqwR35EtGeF8r8uAx41DJ7HgjExioAVcE"
+os.environ["Bin_SECRET_KEY"] = "RSWuB5Ico0XlZAH39C27Z3KSgepcNRYKPxpucvDhnxhPnCfaCt1Jz3bMM2vCu78L"
