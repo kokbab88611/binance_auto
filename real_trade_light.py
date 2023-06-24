@@ -14,7 +14,7 @@ from binance.um_futures import UMFutures
 # from binance.lib.utils import config_logging
 from binance.error import ClientError
 # config_logging(logging, logging.DEBUG)
-from numba import jit, cuda
+# from numba import jit, cuda
 
 # https://www.google.com/search?q=use+graphics+card+to+run+python&oq=use+graphics+card+to+run+python&aqs=chrome..69i57j33i160l2.7968j0j4&sourceid=chrome&ie=UTF-8
 class Data_collector:
@@ -275,7 +275,3 @@ if __name__ == "__main__":
     bot = Data_collector()
     websocket_thread = Thread(target=bot.websocket_thread)
     websocket_thread.start()
-
-# float() argument must be a string or a real number, not 'NoneType'
-# ERROR:root:에러:400 에러코드:-1021 에러 메세지:Timestamp for this request was 1000ms ahead of the server's time.
-# ERROR:websocket:error from callback <bound method Data_collector.on_message of <__main__.Data_collector object at 0x000002168FE5D2D0>>: float() argument must be a string or a real number, not 'NoneType'
