@@ -158,7 +158,7 @@ class Data_collector:
             curernt_grad_ema_fourteen > 0 and prev_grad_ema_eight > 0 and curernt_grad_ema_eight > 0 and 
             current_price > curr_open and self.danger_check(high_list, low_list) and self.peak_check() != "nl"):
             return "long"
-        elif (((kd_prev_diff < 0 and kd_curr_diff < 0) or (curr_k_zero and curr_d_zero and prev_k_zero and prev_d_zero)) and prev_grad_ema_fourteen > 0 and 
+        elif (((kd_prev_diff < 0 and kd_curr_diff < 0) or (curr_k_zero and curr_d_zero and prev_k_zero and prev_d_zero)) and prev_grad_ema_fourteen < 0 and 
             curernt_grad_ema_fourteen < 0 and prev_grad_ema_eight < 0 and curernt_grad_ema_eight < 0 and 
             current_price < curr_open and self.danger_check(high_list, low_list) and self.peak_check() != "ns"): 
             return "short"
@@ -210,10 +210,10 @@ class Data_collector:
         self.in_atr = round(self.in_atr.iloc[-1], 2)   
         if self.in_atr > 50:
             self.in_atr = 50
+            self.price_profit = round(self.enter_price - (self.in_atr * 1.2), 1)
         else:
-            pass
+            self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)     
         self.enter_price = current_price
-        self.price_profit = round(self.enter_price + (self.in_atr * 2.3), 1)
         self.price_stoploss = round(self.enter_price - (self.in_atr * 3), 1)
         self.amount = self.balance/current_price
         self.position = "long"
@@ -223,11 +223,11 @@ class Data_collector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)  
         if self.in_atr > 50:
-            self.in_atr = 50
+            self.in_atr = 50    
+            self.price_profit = round(self.enter_price - (self.in_atr * 1.2), 1)
         else:
-            pass
+            self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)      
         self.enter_price = current_price
-        self.price_profit = round(self.enter_price - (self.in_atr * 2.3), 1)
         self.price_stoploss = round(self.enter_price + (self.in_atr * 3), 1)
         self.amount = self.balance/current_price
         self.enter_price = current_price
