@@ -59,6 +59,7 @@ class Data_collector:
             self.close_position(float(df2['Close']))
         if isClosed == True:
             self.main_df = self.add_frame(df2)
+            # os.system('w32tm /resync')
             time.sleep(15)  
         self.balance = float(self.trade.balance())
 
@@ -174,64 +175,62 @@ class Data_collector:
             return True
         
     def close_position(self, current_price):
-        gain = self.in_atr * 2.5
-        loss = self.in_atr * 3
         if self.position == "long" and self.position_status:
-            if current_price >= self.enter_price + gain or current_price <= self.enter_price - loss:
+            if current_price >= self.price_profit or current_price <= self.price_stoploss:
                 self.trade.order("BTCUSDT", "SELL", False, quantity=self.quantity)
                 self.position_status = False 
                 self.position = None
                 time.sleep(20)
         elif self.position == "short" and self.position_status:
-            if current_price <= self.enter_price - gain or current_price >= self.enter_price + loss:
+            if current_price <= self.price_profit or current_price >= self.price_stoploss:
                 self.trade.order("BTCUSDT", "BUY", False, quantity=self.quantity)
                 self.position_status = False
                 self.position = None
                 time.sleep(20)
 
-
     def open_position(self, current_price, close_list, open_list, high_list, low_list):
         status = self.decision(current_price,close_list, open_list, high_list, low_list)
         self.quantity = round(((self.balance * 25) / current_price) * 0.85,3)
-
         if status == "long" and self.position_status == False: #롱
             self.trade.order("BTCUSDT", "BUY", False, quantity=self.quantity)
             self.long(current_price)
-            self.position_status = True
         elif status == "short" and self.position_status == False: #숏
             self.trade.order("BTCUSDT", "SELL", False, quantity=self.quantity)
             self.short(current_price)
-            self.position_status = True
         else: #관망 
             pass
 
     def long(self, current_price):
         self.in_atr = self.ATR()
-        self.in_atr = round(self.in_atr.iloc[-1], 2)   
+        self.in_atr = round(self.in_atr.iloc[-1], 2) 
+        self.enter_price = current_price  
         if self.in_atr > 50:
             self.in_atr = 50
-            self.price_profit = round(self.enter_price - (self.in_atr * 1.2), 1)
+            self.price_profit = round(self.enter_price + (self.in_atr * 1.4), 1)
         else:
-            self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)     
-        self.enter_price = current_price
-        self.price_stoploss = round(self.enter_price - (self.in_atr * 3), 1)
+            self.price_profit = round(self.enter_price + (self.in_atr * 2), 1)     
+        self.price_stoploss = round(self.enter_price - (self.in_atr * 2.8), 1)
+        print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
         self.amount = self.balance/current_price
         self.position = "long"
+        self.position_status = True
         print(f"롱: {current_price} (실제 진입 가격은 다를 수 있음)")
 
     def short(self, current_price):
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)  
+        self.enter_price = current_price
+
         if self.in_atr > 50:
             self.in_atr = 50    
-            self.price_profit = round(self.enter_price - (self.in_atr * 1.2), 1)
+            self.price_profit = round(self.enter_price - (self.in_atr * 1.4), 1)
         else:
-            self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)      
-        self.enter_price = current_price
-        self.price_stoploss = round(self.enter_price + (self.in_atr * 3), 1)
+            self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)     
+        self.price_stoploss = round(self.enter_price + (self.in_atr * 2.8), 1)
+        print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
         self.amount = self.balance/current_price
-        self.enter_price = current_price
         self.position = "short"
+        self.position_status = True
         print(f"숏: {current_price} (실제 진입 가격은 다를 수 있음)" )    
 
 class BinanceTrade:
