@@ -6,7 +6,7 @@ import matplotlib.pyplot as mp
 
 url = 'https://fapi.binance.com/fapi/v1/klines'
 params = {
-  'symbol': 'BTCUSDT',
+  'symbol': 'btcusdt',
   'interval': '5m',
   'limit': "500"
 
@@ -29,8 +29,8 @@ b = a.ema_indicator()
 # bbl = bb.bollinger_lband()
 
 
-bbh = ta.volatility.bollinger_hband(df['High'], window = 20)
-bbl = ta.volatility.bollinger_lband(df['Low'], window = 20)
+bbh = ta.volatility.bollinger_hband(df['High'], window = 23)
+bbl = ta.volatility.bollinger_lband(df['Low'], window = 23)
 
 bh = ta.volatility.bollinger_hband(df['High'], window = 30)
 bl = ta.volatility.bollinger_lband(df['Low'], window = 30)
@@ -51,6 +51,9 @@ nli = np.array(nli.tail(37).tolist())
 nhi = nhi.astype('int')
 nli = nli.astype('int')
 
+sma = ta.trend.SMAIndicator(df['Close'], window = 13)
+ss = sma.sma_indicator()
+
 qq = ta.momentum.StochRSIIndicator(df['Close'], window = 14)
 d = qq.stochrsi_d()
 k = qq.stochrsi_k()
@@ -61,8 +64,10 @@ k_two = k.tail(2).tolist()
 df_high = df['High']
 df_low = df['Low']
 df_close = df['Close']
-pre_atr = ta.volatility.AverageTrueRange(df_high, df_low, df_close)
-atr = pre_atr.average_true_range() 
+
+
+atr = ta.volatility.AverageTrueRange(df_high, df_low, df_close)
+atr_indicator = atr.average_true_range()
 
 ema_fifty = ta.trend.EMAIndicator(df_close, window=50)
 ema_fourteen = ta.trend.EMAIndicator(df_close, window=14)
@@ -79,18 +84,15 @@ df["bh"] = bh.tail(400)
 df["bl"] = bl.tail(400)
 df['d'] = d
 df['k'] = k
+df['ss'] = ss.tail(400)
 
 # print(bhi.tail(30).tolist())
 # print(bhi.tail(30).tolist())
-print(bhi)
-print(bli)
-print("__________________________________________________________________________")
-print(nhi)
-print(nli)
-
+print(d)
+print(k)
 # print(d_two)
 # print(k_two)
-df.plot(x="openTime", y=["Close", "bh", "bl", "bbh", "bbl"],
+df.plot(x="openTime", y=["Close", "bbh", 'bbl'],
         kind="line", figsize=(25, 10))
 # df.plot(x="openTime", y=["d", "k"],
 #         kind="line", figsize=(10, 10))

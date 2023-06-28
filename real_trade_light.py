@@ -32,7 +32,7 @@ class Data_collector:
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.url = 'https://fapi.binance.com/fapi/v1/klines'
         self.params = {
-        'symbol': 'BTCUSDT',
+        'symbol': 'btcusdt',
         'interval': '5m',
         'limit': "50"
             }
@@ -95,19 +95,28 @@ class Data_collector:
             self.main_df = self.main_df.reset_index(drop=True)
 
     def EMA(self, df_close):
-        ema_fourteen = ta.trend.EMAIndicator(df_close, window=14)
+        ema_fourteen = ta.trend.EMAIndicator(df_close, window=13)
         ema_eight = ta.trend.EMAIndicator(df_close, window=8)
+        ema_five = ta.trend.EMAIndicator(df_close, window=5)
         ema_fourteen_indicator = ema_fourteen.ema_indicator()
         ema_eight_indicator = ema_eight.ema_indicator()
+        ema_five_indicator = ema_five.ema_indicator()
+        ema_five_list = (ema_five_indicator.tail(5)).tolist()
         ema_fourteen_list = (ema_fourteen_indicator.tail(5)).tolist()
         ema_eight_list = (ema_eight_indicator.tail(5)).tolist()
-        return ema_fourteen_list, ema_eight_list
+        return ema_fourteen_list, ema_eight_list, ema_five_list
+    
+    def SMA(self, df_close):
+        sma_fourteen = ta.trend.SMAIndicator(df_close, window=14)
+        sma_fourteen_indicator = sma_fourteen.sma_indicator()
+        sma_fourteen_list = (sma_fourteen_indicator.tail(5)).tolist()
+        return sma_fourteen_list
 
     def peak_check(self):
         self.main_df['High'] = pd.to_numeric(self.main_df['High'], errors='coerce')
         self.main_df['Low'] = pd.to_numeric(self.main_df['Low'], errors='coerce')
-        bhi = ta.volatility.bollinger_hband_indicator(self.main_df['High'], window = 20)
-        bli = ta.volatility.bollinger_lband_indicator(self.main_df['Low'], window = 20)
+        bhi = ta.volatility.bollinger_hband_indicator(self.main_df['High'], window = 24)
+        bli = ta.volatility.bollinger_lband_indicator(self.main_df['Low'], window = 24)
         bhi = np.array(bhi.tail(3).tolist())
         bli = np.array(bli.tail(3).tolist())
         bhi = bhi.astype('int')
@@ -135,33 +144,47 @@ class Data_collector:
         df_high = self.main_df['High']
         df_low = self.main_df['Low']
         df_close = self.main_df['Close']
-        pre_atr = ta.volatility.AverageTrueRange(df_high, df_low, df_close)
-        atr = pre_atr.average_true_range() 
-        return atr
+        atr = ta.volatility.AverageTrueRange(df_high, df_low, df_close)
+        atr_indicator = atr.average_true_range() 
+        return atr_indicator
 
     def decision(self, current_price, close_list, open_list, high_list, low_list):
         df_close = pd.Series(close_list)
-        ema_fourteen_list, ema_eight_list = self.EMA(df_close)
+        
+        ema_fourteen_list, ema_eight_list, ema_five_list = self.EMA(df_close)
+        sma_fourteen_list = self.SMA(df_close)
+        
         two_d, two_k = self.stochRSI()
+        
         prev_d, curr_d = two_d[0], two_d[1]
         prev_k, curr_k = two_k[0], two_k[1]
+        
         prev_open, curr_open = float(open_list[-2]), float(open_list[-1])
         kd_prev_diff, kd_curr_diff = prev_k - prev_d , curr_k - curr_d 
+        
         curr_k_zero, curr_d_zero = curr_k == 0, curr_d == 0
         curr_k_hund, curr_d_hund = curr_k == 100, curr_d == 100  
         prev_k_zero, prev_d_zero = prev_k == 0, prev_d == 0
-        prev_k_hund, prev_d_hund = prev_k == 100, prev_d == 100            
+        prev_k_hund, prev_d_hund = prev_k == 100, prev_d == 100    
+
         prev_grad_ema_fourteen = ema_fourteen_list[-2] - ema_fourteen_list[-3]
         curernt_grad_ema_fourteen = ema_fourteen_list[-1] - ema_fourteen_list[-2]    
         prev_grad_ema_eight = ema_eight_list[-2] - ema_eight_list[-3]
-        curernt_grad_ema_eight = ema_eight_list[-1] - ema_eight_list[-2]  
+        curernt_grad_ema_eight = ema_eight_list[-1] - ema_eight_list[-2] 
+        prev_grad_ema_five = ema_five_list[-2] - ema_five_list[-3]
+        curernt_grad_ema_five = ema_five_list[-1] - ema_five_list[-2] 
+
+        curernt_grad_sma = sma_fourteen_list[-2] - sma_fourteen_list[-1] 
+
         if (((kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and prev_grad_ema_fourteen > 0 and 
-            curernt_grad_ema_fourteen > 0 and prev_grad_ema_eight > 0 and curernt_grad_ema_eight > 0 and 
-            current_price > curr_open and self.danger_check(high_list, low_list) and self.peak_check() != "nl"):
+            curernt_grad_ema_fourteen > 0 and prev_grad_ema_eight > 0 and curernt_grad_ema_eight > 0 and curernt_grad_sma > 0 and
+            prev_grad_ema_five > 0 and curernt_grad_ema_five > 0 and current_price > curr_open and self.danger_check(high_list, low_list) and 
+            self.peak_check() != "nl"):
             return "long"
         elif (((kd_prev_diff < 0 and kd_curr_diff < 0) or (curr_k_zero and curr_d_zero and prev_k_zero and prev_d_zero)) and prev_grad_ema_fourteen < 0 and 
-            curernt_grad_ema_fourteen < 0 and prev_grad_ema_eight < 0 and curernt_grad_ema_eight < 0 and 
-            current_price < curr_open and self.danger_check(high_list, low_list) and self.peak_check() != "ns"): 
+            curernt_grad_ema_fourteen < 0 and prev_grad_ema_eight < 0 and curernt_grad_ema_eight < 0 and  curernt_grad_sma < 0 and
+            prev_grad_ema_five < 0 and curernt_grad_ema_five < 0 and current_price < curr_open and self.danger_check(high_list, low_list) and 
+            self.peak_check() != "ns"): 
             return "short"
         else:
             return "pass"
@@ -178,18 +201,27 @@ class Data_collector:
         if self.position == "long" and self.position_status:
             if current_price >= self.price_profit or current_price <= self.price_stoploss:
                 self.trade.order("BTCUSDT", "SELL", False, quantity=self.quantity)
+                if current_price >= self.price_profit:
+                    print("수익")
+                else:
+                    print("손실")
                 self.position_status = False 
                 self.position = None
                 time.sleep(20)
         elif self.position == "short" and self.position_status:
             if current_price <= self.price_profit or current_price >= self.price_stoploss:
                 self.trade.order("BTCUSDT", "BUY", False, quantity=self.quantity)
+                if current_price <= self.price_profit:
+                    print("수익")
+                else:
+                    print("손실")
                 self.position_status = False
                 self.position = None
                 time.sleep(20)
 
     def open_position(self, current_price, close_list, open_list, high_list, low_list):
         status = self.decision(current_price,close_list, open_list, high_list, low_list)
+        self.balance = float(self.trade.balance())
         self.quantity = round(((self.balance * 25) / current_price) * 0.85,3)
         if status == "long" and self.position_status == False: #롱
             self.trade.order("BTCUSDT", "BUY", False, quantity=self.quantity)
