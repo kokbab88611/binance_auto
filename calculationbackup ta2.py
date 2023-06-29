@@ -7,7 +7,7 @@ import matplotlib.pyplot as mp
 url = 'https://fapi.binance.com/fapi/v1/klines'
 params = {
   'symbol': 'btcusdt',
-  'interval': '5m',
+  'interval': '3m',
   'limit': "500"
 
 }
@@ -19,13 +19,14 @@ df = df.drop(df.columns[[6,7,8,9,10,11]], axis=1)
 df['High'] = pd.to_numeric(df['High'], errors='coerce')
 df['Low'] = pd.to_numeric(df['Low'], errors='coerce')
 df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
+df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce')
 # print(df)
 a = ta.trend.EMAIndicator(df['Close'], window=50)
 b = a.ema_indicator()
 # print(df['High'])
 
 # bb = ta.volatility.BollingerBands(df['Close'], window = 20)
-# bbh = bb.bollinger_hband()
+# bbh = bb.bollinger_hband()``
 # bbl = bb.bollinger_lband()
 
 
@@ -65,7 +66,26 @@ df_high = df['High']
 df_low = df['Low']
 df_close = df['Close']
 
+ma =ta.trend.macd_diff(df['Close'], window_slow=13, window_fast=6, window_sign=4)
 
+close_list = (df['Close'].tail(20)).to_list()
+
+vwap = ta.volume.volume_weighted_average_price(df['High'],df['Low'],df['Close'],df['Volume'])
+vvvwap = vwap
+vwap = vwap.tail(20)
+vwap_high = vwap + 10
+vwap_low = vwap - 10
+
+vwap_high_list, vwap_low_list = np.array(vwap_high), np.array(vwap_low)   
+vwap_short_check = np.subtract(close_list, vwap_high_list)[-20:]
+vwap_long_check = np.subtract(close_list, vwap_low_list)[-20:]
+vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
+vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
+
+print(vwap_short_check)
+print(vwap_long_check)
+print(vwap_short_check_bool)
+print(vwap_long_check_bool)
 atr = ta.volatility.AverageTrueRange(df_high, df_low, df_close)
 atr_indicator = atr.average_true_range()
 
@@ -84,15 +104,19 @@ df["bh"] = bh.tail(400)
 df["bl"] = bl.tail(400)
 df['d'] = d
 df['k'] = k
+df['vwap'] = vvvwap
+df['vwap+20'] = df['vwap'] + 10
+df['vwap-20'] = df['vwap'] - 10
 df['ss'] = ss.tail(400)
 
 # print(bhi.tail(30).tolist())
 # print(bhi.tail(30).tolist())
-print(d)
-print(k)
+# print(d)
+# print(k)
 # print(d_two)
 # print(k_two)
-df.plot(x="openTime", y=["Close", "bbh", 'bbl'],
+# print(type(df['vwap']))
+df.plot(x="openTime", y=["Close", 'vwap','vwap+20','vwap-20'],
         kind="line", figsize=(25, 10))
 # df.plot(x="openTime", y=["d", "k"],
 #         kind="line", figsize=(10, 10))

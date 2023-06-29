@@ -176,12 +176,12 @@ class Data_collector:
 
         curernt_grad_sma = sma_fourteen_list[-2] - sma_fourteen_list[-1] 
 
-        if (((kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and prev_grad_ema_fourteen > 0 and 
+        if ((kd_prev_diff > 0 or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and prev_grad_ema_fourteen > 0 and 
             curernt_grad_ema_fourteen > 0 and prev_grad_ema_eight > 0 and curernt_grad_ema_eight > 0 and curernt_grad_sma > 0 and
             prev_grad_ema_five > 0 and curernt_grad_ema_five > 0 and current_price > curr_open and self.danger_check(high_list, low_list) and 
             self.peak_check() != "nl"):
             return "long"
-        elif (((kd_prev_diff < 0 and kd_curr_diff < 0) or (curr_k_zero and curr_d_zero and prev_k_zero and prev_d_zero)) and prev_grad_ema_fourteen < 0 and 
+        elif ((kd_prev_diff < 0 or (curr_k_zero and curr_d_zero and prev_k_zero and prev_d_zero)) and prev_grad_ema_fourteen < 0 and 
             curernt_grad_ema_fourteen < 0 and prev_grad_ema_eight < 0 and curernt_grad_ema_eight < 0 and  curernt_grad_sma < 0 and
             prev_grad_ema_five < 0 and curernt_grad_ema_five < 0 and current_price < curr_open and self.danger_check(high_list, low_list) and 
             self.peak_check() != "ns"): 
@@ -236,12 +236,12 @@ class Data_collector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2) 
         self.enter_price = current_price  
-        if self.in_atr > 50:
-            self.in_atr = 50
-            self.price_profit = round(self.enter_price + (self.in_atr * 1.4), 1)
+        if self.in_atr > 35:
+            self.in_atr *= 1.3
+            self.price_profit = round(self.enter_price + self.in_atr, 1)
         else:
             self.price_profit = round(self.enter_price + (self.in_atr * 2), 1)     
-        self.price_stoploss = round(self.enter_price - (self.in_atr * 2.8), 1)
+        self.price_stoploss = round(self.enter_price - (self.in_atr * 2.5), 1)
         print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
         self.amount = self.balance/current_price
         self.position = "long"
@@ -252,13 +252,12 @@ class Data_collector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)  
         self.enter_price = current_price
-
-        if self.in_atr > 50:
-            self.in_atr = 50    
-            self.price_profit = round(self.enter_price - (self.in_atr * 1.4), 1)
+        if self.in_atr > 35:
+            self.in_atr *= 1.3
+            self.price_profit = round(self.enter_price - self.in_atr, 1)
         else:
             self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)     
-        self.price_stoploss = round(self.enter_price + (self.in_atr * 2.8), 1)
+        self.price_stoploss = round(self.enter_price + (self.in_atr * 2.5), 1)
         print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
         self.amount = self.balance/current_price
         self.position = "short"
