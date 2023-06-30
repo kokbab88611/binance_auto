@@ -167,9 +167,9 @@ class Data_collector:
         sma_fourteen_list = self.SMA()
         
         vwap_high_list, vwap_low_list = self.vwap()
-        vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)   
-        vwap_short_check = np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
-        vwap_long_check = np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
+        # vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)   
+        vwap_short_check = current_price < vwap_high_list[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
+        vwap_long_check = current_price > vwap_low_list[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
         vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
         vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
 
@@ -211,8 +211,8 @@ class Data_collector:
         macd_short = ma[-1] < 0
 
         mfi = self.money_flow_index() 
-        mfi_short = (mfi[-1] < 60) #(mfi[-3] > 60 and mfi[-2] < 60) and 
-        mfi_long = (mfi[-1] > 30) # (mfi[-3] < 20 and mfi[-2] > 20 ) and
+        mfi_short = any(x < 65 for x in mfi) and any(x < 65 for x in mfi)#(mfi[-1] < 60) #(mfi[-3] > 60 and mfi[-2] < 60) and 
+        mfi_long = any(x < 30 for x in mfi) and any(x > 30 for x in mfi) #(mfi[-1] > 30) # (mfi[-3] < 20 and mfi[-2] > 20 ) and
 
         print('########################################################################################\n'
               f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
