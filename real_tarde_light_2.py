@@ -171,10 +171,8 @@ class Data_collector:
         vwap_high_list, vwap_low_list = self.vwap()
         # vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)  
 
-        vwap_short_check = current_price < vwap_high_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
-        vwap_long_check = current_price > vwap_low_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
-        vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
-        vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
+        vwap_short_check_bool = current_price < vwap_high_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
+        vwap_long_check_bool = current_price > vwap_low_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
 
         two_d, two_k = self.stochRSI()
         

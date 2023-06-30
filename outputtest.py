@@ -171,11 +171,9 @@ class Data_collector:
         vwap_high_list, vwap_low_list = self.vwap()
         # vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)  
 
-        vwap_short_check = current_price < vwap_high_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
-        vwap_long_check = current_price > vwap_low_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
-        vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
-        vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
-
+        vwap_short_check_bool = current_price < vwap_high_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
+        vwap_long_check_bool = current_price > vwap_low_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
+        
         two_d, two_k = self.stochRSI()
         
         prev_d, curr_d = two_d[0], two_d[1]
@@ -230,6 +228,7 @@ class Data_collector:
               f'ema_eight_long: {ema_eight_long}\n'
               f'ema_five_long: {ema_five_long}\n'
               f'mfi_long: {mfi_long}\n'
+              f'vwap_long: {vwap_low_list.iloc[-1]}\n'
               f'_______________________________________________________________________________________\n'
               f'kd short: {(kd_prev_diff < 0 and kd_curr_diff < 0)}\n'
               f'vwap_short_check_bool: {vwap_short_check_bool}\n'
@@ -237,8 +236,9 @@ class Data_collector:
               f'ema_fourteen_short: {ema_fourteen_short}\n'
               f'ema_eight_short: {ema_eight_short}\n'
               f'ema_five_short: {ema_five_short}\n'
-              f'mfi_short: {mfi_short}\n')
-              
+              f'mfi_short: {mfi_short}\n'
+              f'vwap_short: {vwap_high_list.iloc[-1]}')
+
         if (((kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and 
             ema_fourteen_long and ema_eight_long and ema_five_long and
             curernt_grad_sma > 0 and vwap_long_check_bool and
