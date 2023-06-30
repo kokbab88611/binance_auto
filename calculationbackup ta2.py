@@ -67,14 +67,14 @@ df_low = df['Low']
 df_close = df['Close']
 
 money_flow = ta.volume.money_flow_index(df['High'], df['Low'], df['Close'], df['Volume'])
-ma =ta.trend.macd_diff(df['Close'], window_slow=13, window_fast=6, window_sign=4)
-
+ma = (ta.trend.macd_diff(df['Close'], window_slow=13, window_fast=6, window_sign=4).tail(5)).tolist()
+print(ma[-3] < ma[-2] and ma[-2] < ma[-1] )
 close_list = (df['Close'].tail(20)).to_list()
 
 vwap = ta.volume.volume_weighted_average_price(df['High'],df['Low'],df['Close'],df['Volume'])
 vvvwap = vwap
-vwap = vwap.tail(20)
-vwap_high = vwap + 10
+vwap_high = vvvwap + 10
+print(vwap_high)
 vwap_low = vwap - 10
 
 vwap_high_list, vwap_low_list = np.array(vwap_high), np.array(vwap_low)   
