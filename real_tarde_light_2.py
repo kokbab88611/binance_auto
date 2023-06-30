@@ -34,7 +34,7 @@ class Data_collector:
         self.params = {
         'symbol': 'btcusdt',
         'interval': '3m',
-        'limit': "40"
+        'limit': "41"
             }
         self.main_df = self.get_prev_data()
         self.trade = BinanceTrade()
@@ -80,6 +80,7 @@ class Data_collector:
                                             'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore']) 
         self.main_df = self.main_df.drop(self.main_df.columns[[6,7,8,9,10,11]], axis=1)
         self.main_df.loc[len(self.main_df)] = pd.Series()
+        self.main_df = self.main_df.iloc[:-1]
         return self.main_df
 
     def add_frame(self, df2):
@@ -164,12 +165,14 @@ class Data_collector:
         self.main_df['Close'] = pd.to_numeric(self.main_df['Close'], errors='coerce')
         self.main_df['Volume'] = pd.to_numeric(self.main_df['Volume'], errors='coerce')     
         ema_fourteen_list, ema_eight_list, ema_five_list = self.EMA()
+        
         sma_fourteen_list = self.SMA()
         
         vwap_high_list, vwap_low_list = self.vwap()
-        # vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)   
-        vwap_short_check = current_price < vwap_high_list.index[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
-        vwap_long_check = current_price > vwap_low_list.index[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
+        # vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)  
+
+        vwap_short_check = current_price < vwap_high_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
+        vwap_long_check = current_price > vwap_low_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
         vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
         vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
 
@@ -214,27 +217,27 @@ class Data_collector:
         mfi_short = any(x < 65 for x in mfi) and any(x < 65 for x in mfi)#(mfi[-1] < 60) #(mfi[-3] > 60 and mfi[-2] < 60) and 
         mfi_long = any(x < 30 for x in mfi) and any(x > 30 for x in mfi) #(mfi[-1] > 30) # (mfi[-3] < 20 and mfi[-2] > 20 ) and
 
-        # print('########################################################################################\n'
-        #       f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
-        #       f'curernt_grad_sma: {curernt_grad_sma}\n'
-        #       f'current_price > curr_open: {current_price > curr_open}\n'
-        #       f'peak: {self.peak_check()}\n'
-        #       f'_______________________________________________________________________________________\n'
-        #       f'kd long: {(kd_prev_diff > 0 and kd_curr_diff > 0)}\n'
-        #       f'vwap_long_check_bool: {vwap_long_check_bool}\n'
-        #       f'macd_long: {macd_long}\n'
-        #       f'ema_fourteen_long: {ema_fourteen_long}\n'
-        #       f'ema_eight_long: {ema_eight_long}\n'
-        #       f'ema_five_long: {ema_five_long}\n'
-        #       f'mfi_long: {mfi_long}\n'
-        #       f'_______________________________________________________________________________________\n'
-        #       f'kd short: {(kd_prev_diff < 0 and kd_curr_diff < 0)}\n'
-        #       f'vwap_short_check_bool: {vwap_short_check_bool}\n'
-        #       f'macd_short: {macd_short}\n'
-        #       f'ema_fourteen_short: {ema_fourteen_short}\n'
-        #       f'ema_eight_short: {ema_eight_short}\n'
-        #       f'ema_five_short: {ema_five_short}\n'
-        #       f'mfi_short: {mfi_short}\n')
+        print('########################################################################################\n'
+              f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
+              f'curernt_grad_sma: {curernt_grad_sma}\n'
+              f'current_price > curr_open: {current_price > curr_open}\n'
+              f'peak: {self.peak_check()}\n'
+              f'_______________________________________________________________________________________\n'
+              f'kd long: {(kd_prev_diff > 0 and kd_curr_diff > 0)}\n'
+              f'vwap_long_check_bool: {vwap_long_check_bool}\n'
+              f'macd_long: {macd_long}\n'
+              f'ema_fourteen_long: {ema_fourteen_long}\n'
+              f'ema_eight_long: {ema_eight_long}\n'
+              f'ema_five_long: {ema_five_long}\n'
+              f'mfi_long: {mfi_long}\n'
+              f'_______________________________________________________________________________________\n'
+              f'kd short: {(kd_prev_diff < 0 and kd_curr_diff < 0)}\n'
+              f'vwap_short_check_bool: {vwap_short_check_bool}\n'
+              f'macd_short: {macd_short}\n'
+              f'ema_fourteen_short: {ema_fourteen_short}\n'
+              f'ema_eight_short: {ema_eight_short}\n'
+              f'ema_five_short: {ema_five_short}\n'
+              f'mfi_short: {mfi_short}\n')
               
         if (((kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and 
             ema_fourteen_long and ema_eight_long and ema_five_long and

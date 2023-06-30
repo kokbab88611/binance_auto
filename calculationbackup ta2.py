@@ -68,25 +68,22 @@ df_close = df['Close']
 
 money_flow = ta.volume.money_flow_index(df['High'], df['Low'], df['Close'], df['Volume'])
 ma = (ta.trend.macd_diff(df['Close'], window_slow=13, window_fast=6, window_sign=4).tail(5)).tolist()
-print(ma[-3] < ma[-2] and ma[-2] < ma[-1] )
+print(ma[-3] < ma[-2] and ma[-2] < ma[-1])
 close_list = (df['Close'].tail(20)).to_list()
 
-vwap = ta.volume.volume_weighted_average_price(df['High'],df['Low'],df['Close'],df['Volume'])
-vvvwap = vwap
-vwap_high = vvvwap + 10
-print(vwap_high)
+vwap = ta.volume.volume_weighted_average_price(df['High'],df['Low'],df['Close'],df['Volume']).tail(5)
+vwap_high = vwap + 10
 vwap_low = vwap - 10
+print(f"vwap high {vwap_high}")
+print(f"vwap low {vwap_low}")
+# vwap_high_list, vwap_low_list = np.array(vwap_high), np.array(vwap_low)   
+# vwap_short_check = np.subtract(close_list, vwap_high_list)[-20:]
+# vwap_long_check = np.subtract(close_list, vwap_low_list)[-20:]
+# vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
+# vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
 
-vwap_high_list, vwap_low_list = np.array(vwap_high), np.array(vwap_low)   
-vwap_short_check = np.subtract(close_list, vwap_high_list)[-20:]
-vwap_long_check = np.subtract(close_list, vwap_low_list)[-20:]
-vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
-vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
-
-print(vwap_short_check)
-print(vwap_long_check)
-print(vwap_short_check_bool)
-print(vwap_long_check_bool)
+# print(vwap_high_list[-5:])
+# print(vwap_low_list[-5:])
 
 macd = ta.trend.macd(df_close)
 atr = ta.volatility.AverageTrueRange(df_high, df_low, df_close)
@@ -117,7 +114,6 @@ df['ss'] = ss.tail(400)
 # print(d)
 # print(k)
 # print(d_two)
-print(money_flow)
 # print(type(df['vwap']))
 df.plot(x="openTime", y=["Close", 'vwap','vwap+10','vwap-10'],
         kind="line", figsize=(25, 10))

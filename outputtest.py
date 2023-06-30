@@ -34,7 +34,7 @@ class Data_collector:
         self.params = {
         'symbol': 'btcusdt',
         'interval': '3m',
-        'limit': "40"
+        'limit': "41"
             }
         self.main_df = self.get_prev_data()
         self.trade = BinanceTrade()
@@ -80,6 +80,7 @@ class Data_collector:
                                             'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore']) 
         self.main_df = self.main_df.drop(self.main_df.columns[[6,7,8,9,10,11]], axis=1)
         self.main_df.loc[len(self.main_df)] = pd.Series()
+        self.main_df = self.main_df.iloc[:-1]
         return self.main_df
 
     def add_frame(self, df2):
@@ -155,7 +156,7 @@ class Data_collector:
         return ma
     
     def money_flow_index(self):
-        mfi = (ta.volume.money_flow_index(self.main_df['High'], self.main_df['Low'], self.main_df['Close'], self.main_df['Volume']).tail(5)).tolist()
+        mfi = (ta.volume.money_flow_index(self.main_df['High'], self.main_df['Low'], self.main_df['Close'], self.main_df['Volume']).tail(7)).tolist()
         return mfi
 
     def decision(self, current_price, close_list, open_list, high_list, low_list):
@@ -164,12 +165,14 @@ class Data_collector:
         self.main_df['Close'] = pd.to_numeric(self.main_df['Close'], errors='coerce')
         self.main_df['Volume'] = pd.to_numeric(self.main_df['Volume'], errors='coerce')     
         ema_fourteen_list, ema_eight_list, ema_five_list = self.EMA()
+        
         sma_fourteen_list = self.SMA()
         
         vwap_high_list, vwap_low_list = self.vwap()
-        # vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)   
-        vwap_short_check = current_price < vwap_high_list.index[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
-        vwap_long_check = current_price > vwap_low_list.index[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
+        # vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)  
+
+        vwap_short_check = current_price < vwap_high_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
+        vwap_long_check = current_price > vwap_low_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
         vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
         vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
 
@@ -208,7 +211,7 @@ class Data_collector:
 
         ma = self.macd()
         macd_long = ma[-3] < ma[-2] and ma[-2] < ma[-1] 
-        macd_short = ma[-3] > ma[-2] and ma[-2] > ma[-1]
+        macd_short = ma[-3] > ma[-2] and ma[-2] > ma[-1] 
 
         mfi = self.money_flow_index() 
         mfi_short = any(x < 65 for x in mfi) and any(x < 65 for x in mfi)#(mfi[-1] < 60) #(mfi[-3] > 60 and mfi[-2] < 60) and 
