@@ -215,27 +215,27 @@ class Data_collector:
         mfi_short = any(x < 65 for x in mfi) and any(x < 65 for x in mfi)#(mfi[-1] < 60) #(mfi[-3] > 60 and mfi[-2] < 60) and 
         mfi_long = any(x < 30 for x in mfi) and any(x > 30 for x in mfi) #(mfi[-1] > 30) # (mfi[-3] < 20 and mfi[-2] > 20 ) and
 
-        print('########################################################################################\n'
-              f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
-              f'curernt_grad_sma: {curernt_grad_sma}\n'
-              f'current_price > curr_open: {current_price > curr_open}\n'
-              f'peak: {self.peak_check()}\n'
-              f'_______________________________________________________________________________________\n'
-              f'kd long: {(kd_prev_diff > 0 and kd_curr_diff > 0)}\n'
-              f'vwap_long_check_bool: {vwap_long_check_bool}\n'
-              f'macd_long: {macd_long}\n'
-              f'ema_fourteen_long: {ema_fourteen_long}\n'
-              f'ema_eight_long: {ema_eight_long}\n'
-              f'ema_five_long: {ema_five_long}\n'
-              f'mfi_long: {mfi_long}\n'
-              f'_______________________________________________________________________________________\n'
-              f'kd short: {(kd_prev_diff < 0 and kd_curr_diff < 0)}\n'
-              f'vwap_short_check_bool: {vwap_short_check_bool}\n'
-              f'macd_short: {macd_short}\n'
-              f'ema_fourteen_short: {ema_fourteen_short}\n'
-              f'ema_eight_short: {ema_eight_short}\n'
-              f'ema_five_short: {ema_five_short}\n'
-              f'mfi_short: {mfi_short}\n')
+        # print('########################################################################################\n'
+        #       f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
+        #       f'curernt_grad_sma: {curernt_grad_sma}\n'
+        #       f'current_price > curr_open: {current_price > curr_open}\n'
+        #       f'peak: {self.peak_check()}\n'
+        #       f'_______________________________________________________________________________________\n'
+        #       f'kd long: {(kd_prev_diff > 0 and kd_curr_diff > 0)}\n'
+        #       f'vwap_long_check_bool: {vwap_long_check_bool}\n'
+        #       f'macd_long: {macd_long}\n'
+        #       f'ema_fourteen_long: {ema_fourteen_long}\n'
+        #       f'ema_eight_long: {ema_eight_long}\n'
+        #       f'ema_five_long: {ema_five_long}\n'
+        #       f'mfi_long: {mfi_long}\n'
+        #       f'_______________________________________________________________________________________\n'
+        #       f'kd short: {(kd_prev_diff < 0 and kd_curr_diff < 0)}\n'
+        #       f'vwap_short_check_bool: {vwap_short_check_bool}\n'
+        #       f'macd_short: {macd_short}\n'
+        #       f'ema_fourteen_short: {ema_fourteen_short}\n'
+        #       f'ema_eight_short: {ema_eight_short}\n'
+        #       f'ema_five_short: {ema_five_short}\n'
+        #       f'mfi_short: {mfi_short}\n')
               
         if (((kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and 
             ema_fourteen_long and ema_eight_long and ema_five_long and
