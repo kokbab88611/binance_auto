@@ -212,7 +212,7 @@ class Data_collector:
 
         mfi = self.money_flow_index() 
         mfi_short = (mfi[-1] < 60) #(mfi[-3] > 60 and mfi[-2] < 60) and 
-        mfi_long = (mfi[-1] > 20 ) # (mfi[-3] < 20 and mfi[-2] > 20 ) and
+        mfi_long = (mfi[-1] > 30) # (mfi[-3] < 20 and mfi[-2] > 20 ) and
 
         print('########################################################################################\n'
               f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
@@ -357,19 +357,7 @@ class BinanceTrade:
             logging.error(f"에러:{error.status_code} 에러코드:{error.error_code} 에러 메세지:{error.error_message}")
     
     def order(self, symbol, side, reduceOnly, quantity):
-        try:
-            quantity = float(round(quantity, 3))
-            stop_price = None
-            response = self.um_futures_client.new_order(
-                symbol=symbol,
-                side=side,
-                type= "MARKET",
-                quantity=quantity,
-                reduceOnly = reduceOnly
-            )
-            print(response)
-        except ClientError as error:
-            logging.error(f"에러:{error.status_code} 에러코드:{error.error_code} 에러 메세지:{error.error_message}")
+        pass
 
 if __name__ == "__main__":
     bot = Data_collector()
