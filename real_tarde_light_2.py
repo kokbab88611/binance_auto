@@ -34,7 +34,7 @@ class Data_collector:
         self.params = {
         'symbol': 'btcusdt',
         'interval': '3m',
-        'limit': "30"
+        'limit': "40"
             }
         self.main_df = self.get_prev_data()
         self.trade = BinanceTrade()
@@ -91,7 +91,7 @@ class Data_collector:
         df2 = list(df2.values())
         self.main_df.iloc[-1] = df2
         length_df = len(self.main_df)
-        if length_df == 50:
+        if length_df == 55:
             self.main_df = self.main_df.drop(self.main_df.index[:15])
             self.main_df = self.main_df.reset_index(drop=True)
 
@@ -114,8 +114,6 @@ class Data_collector:
         return sma_fourteen_list
 
     def peak_check(self):
-        self.main_df['High'] = pd.to_numeric(self.main_df['High'], errors='coerce')
-        self.main_df['Low'] = pd.to_numeric(self.main_df['Low'], errors='coerce')
         bhi = ta.volatility.bollinger_hband_indicator(self.main_df['High'], window = 24)
         bli = ta.volatility.bollinger_lband_indicator(self.main_df['Low'], window = 24)
         bhi = np.array(bhi.tail(3).tolist())
@@ -130,7 +128,7 @@ class Data_collector:
             return "safe"
 
     def stochRSI(self):
-        df_close = pd.to_numeric(self.main_df['Close'], errors='coerce')
+        df_close = self.main_df['Close']
         rsi = ta.momentum.StochRSIIndicator(df_close, window = 14)
         d = rsi.stochrsi_d()
         k = rsi.stochrsi_k()
@@ -139,9 +137,6 @@ class Data_collector:
         return d_two, k_two
 
     def ATR(self):
-        self.main_df['High'] = pd.to_numeric(self.main_df['High'], errors='coerce')
-        self.main_df['Low'] = pd.to_numeric(self.main_df['Low'], errors='coerce')
-        self.main_df['Close'] = pd.to_numeric(self.main_df['Close'], errors='coerce')
         df_high = self.main_df['High']
         df_low = self.main_df['Low']
         df_close = self.main_df['Close']
@@ -156,15 +151,26 @@ class Data_collector:
         vwap_low = vwap - 10
         return vwap_high, vwap_low
 
-    def decision(self, close_list, current_price, open_list, high_list, low_list):
-        
+    def macd(self):
+        ma = (ta.trend.macd_diff(self.main_df['Close'], window_slow=13, window_fast=6, window_sign=4).tail(5)).tolist()
+        return ma
+    
+    def money_flow_index(self):
+        mfi = (ta.volume.money_flow_index(self.main_df['High'], self.main_df['Low'], self.main_df['Close'], self.main_df['Volume']).tail(5)).tolist()
+        return mfi
+
+    def decision(self, current_price, close_list, open_list, high_list, low_list):
+        self.main_df['High'] = pd.to_numeric(self.main_df['High'], errors='coerce')
+        self.main_df['Low'] = pd.to_numeric(self.main_df['Low'], errors='coerce')
+        self.main_df['Close'] = pd.to_numeric(self.main_df['Close'], errors='coerce')
+        self.main_df['Volume'] = pd.to_numeric(self.main_df['Volume'], errors='coerce')     
         ema_fourteen_list, ema_eight_list, ema_five_list = self.EMA()
         sma_fourteen_list = self.SMA()
         
         vwap_high_list, vwap_low_list = self.vwap()
         vwap_high_list, vwap_low_list = np.array(vwap_high_list), np.array(vwap_low_list)   
-        vwap_short_check = np.subtract(close_list, vwap_high_list).tail(3)
-        vwap_long_check = np.subtract(close_list, vwap_low_list).tail(3)
+        vwap_short_check = np.subtract(np.array(close_list, dtype=np.float64), vwap_high_list)[-3:]
+        vwap_long_check = np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
         vwap_short_check_bool = np.any(vwap_short_check > 0) and np.any(vwap_short_check < 0)
         vwap_long_check_bool = np.any(vwap_long_check > 0) and np.any(vwap_long_check < 0)
 
@@ -173,7 +179,7 @@ class Data_collector:
         prev_d, curr_d = two_d[0], two_d[1]
         prev_k, curr_k = two_k[0], two_k[1]
         
-        prev_open, curr_open = float(open_list[-2]), float(open_list[-1])
+        curr_open = float(open_list[-1])
         kd_prev_diff, kd_curr_diff = prev_k - prev_d , curr_k - curr_d 
         
         curr_k_zero, curr_d_zero = curr_k == 0, curr_d == 0
@@ -181,23 +187,67 @@ class Data_collector:
         prev_k_zero, prev_d_zero = prev_k == 0, prev_d == 0
         prev_k_hund, prev_d_hund = prev_k == 100, prev_d == 100    
 
-        prev_grad_ema_fourteen = ema_fourteen_list[-2] - ema_fourteen_list[-3]
-        curernt_grad_ema_fourteen = ema_fourteen_list[-1] - ema_fourteen_list[-2]    
-        prev_grad_ema_eight = ema_eight_list[-2] - ema_eight_list[-3]
-        curernt_grad_ema_eight = ema_eight_list[-1] - ema_eight_list[-2] 
-        prev_grad_ema_five = ema_five_list[-2] - ema_five_list[-3]
-        curernt_grad_ema_five = ema_five_list[-1] - ema_five_list[-2] 
+        prev_grad_ema_fourteen = ema_fourteen_list[-3] - ema_fourteen_list[-2]
+        curernt_grad_ema_fourteen = ema_fourteen_list[-2] - ema_fourteen_list[-1]  
+
+        ema_fourteen_long = prev_grad_ema_fourteen > curernt_grad_ema_fourteen
+        ema_fourteen_short = prev_grad_ema_fourteen < curernt_grad_ema_fourteen
+
+        prev_grad_ema_eight = ema_eight_list[-3] - ema_eight_list[-2]
+        curernt_grad_ema_eight = ema_eight_list[-2] - ema_eight_list[-1] 
+
+        ema_eight_long = prev_grad_ema_eight > curernt_grad_ema_eight
+        ema_eight_short = prev_grad_ema_eight < curernt_grad_ema_eight
+
+        prev_grad_ema_five = ema_five_list[-3] - ema_five_list[-2]
+        curernt_grad_ema_five = ema_five_list[-2] - ema_five_list[-1] 
+
+        ema_five_long = prev_grad_ema_five > curernt_grad_ema_five
+        ema_five_short = prev_grad_ema_five < curernt_grad_ema_five
 
         curernt_grad_sma = sma_fourteen_list[-2] - sma_fourteen_list[-1] 
 
-        if (((kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and prev_grad_ema_fourteen > 0 and 
-            curernt_grad_ema_fourteen > 0 and prev_grad_ema_eight > 0 and curernt_grad_ema_eight > 0 and curernt_grad_sma > 0 and vwap_long_check_bool and
-            prev_grad_ema_five > 0 and curernt_grad_ema_five > 0 and current_price > curr_open and 
+        ma = self.macd()
+        macd_long = ma[-1] > 0
+        macd_short = ma[-1] < 0
+
+        mfi = self.money_flow_index() 
+        mfi_short = (mfi[-3] > 60 and mfi[-2] < 60) and (mfi[-1] < 60) 
+        mfi_long = (mfi[-3] < 20 and mfi[-2] > 20 ) and (mfi[-1] > 20 ) 
+
+        # print('########################################################################################\n'
+        #       f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
+        #       f'curernt_grad_sma: {curernt_grad_sma}\n'
+        #       f'current_price > curr_open: {current_price > curr_open}\n'
+        #       f'peak: {self.peak_check()}\nkd short: {(kd_prev_diff < 0 and kd_curr_diff < 0) or (curr_k_zero and curr_d_zero and prev_d_zero and prev_d_zero)}\n'
+        #       f'kd long: {(kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_d_hund and prev_d_hund)}\n'
+        #       f'_______________________________________________________________________________________\n'
+        #       f'vwap_long_check_bool: {vwap_long_check_bool}\n'
+        #       f'macd_long: {macd_long}\n'
+        #       f'ema_fourteen_long: {ema_fourteen_long}\n'
+        #       f'ema_eight_long: {ema_eight_long}\n'
+        #       f'ema_five_long: {ema_five_long}\n'
+        #       f'mfi_long: {mfi_long}\n'
+        #       f'_______________________________________________________________________________________\n'
+        #       f'vwap_short_check_bool: {vwap_short_check_bool}\n'
+        #       f'macd_short: {macd_short}\n'
+        #       f'ema_fourteen_short: {ema_fourteen_short}\n'
+        #       f'ema_eight_short: {ema_eight_short}\n'
+        #       f'ema_five_short: {ema_five_short}\n'
+        #       f'mfi_short: {mfi_short}\n')
+              
+        if (((kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and 
+            ema_fourteen_long and ema_eight_long and ema_five_long and
+            curernt_grad_sma > 0 and vwap_long_check_bool and
+            current_price > curr_open and 
+            macd_long and mfi_long and
             self.peak_check() != "nl"): #self.danger_check(high_list, low_list) and 
             return "long"
-        elif (((kd_prev_diff < 0 and kd_curr_diff < 0) or (curr_k_zero and curr_d_zero and prev_k_zero and prev_d_zero)) and prev_grad_ema_fourteen < 0 and 
-            curernt_grad_ema_fourteen < 0 and prev_grad_ema_eight < 0 and curernt_grad_ema_eight < 0 and  curernt_grad_sma < 0 and vwap_short_check_bool and
-            prev_grad_ema_five < 0 and curernt_grad_ema_five < 0 and current_price < curr_open and 
+        elif (((kd_prev_diff < 0 and kd_curr_diff < 0) or (curr_k_zero and curr_d_zero and prev_k_zero and prev_d_zero)) and 
+            ema_fourteen_short and ema_eight_short and ema_five_short and
+            curernt_grad_sma < 0 and vwap_short_check_bool and
+            current_price < curr_open and 
+            macd_short and mfi_short and
             self.peak_check() != "ns"): #self.danger_check(high_list, low_list) and 
             return "short"
         else:
@@ -250,12 +300,16 @@ class Data_collector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2) 
         self.enter_price = current_price  
-        if self.in_atr > 50:
-            self.in_atr = 50
-            self.price_profit = round(self.enter_price + (self.in_atr * 1.4), 1)
+        if self.in_atr > 35:
+            self.in_atr = 40
+            self.price_profit = round(self.enter_price + (self.in_atr * 1.3), 1)
+            self.price_stoploss = round(self.enter_price - (self.in_atr * 2.5), 1)
+        elif self.in_atr < 20:
+            self.price_profit = round(self.enter_price + (self.in_atr * 3), 1)
+            self.price_stoploss = round(self.enter_price - (self.in_atr * 4.5), 1)
         else:
             self.price_profit = round(self.enter_price + (self.in_atr * 2), 1)     
-        self.price_stoploss = round(self.enter_price - (self.in_atr * 2.8), 1)
+            self.price_stoploss = round(self.enter_price - (self.in_atr * 3.5), 1)
         print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
         self.amount = self.balance/current_price
         self.position = "long"
@@ -266,13 +320,16 @@ class Data_collector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)  
         self.enter_price = current_price
-
-        if self.in_atr > 50:
-            self.in_atr = 50    
-            self.price_profit = round(self.enter_price - (self.in_atr * 1.4), 1)
+        if self.in_atr > 35:
+            self.in_atr = 40
+            self.price_profit = round(self.enter_price - (self.in_atr * 1.3), 1)
+            self.price_stoploss = round(self.enter_price + (self.in_atr * 2.5), 1)
+        elif self.in_atr < 20:
+            self.price_profit = round(self.enter_price - (self.in_atr * 3), 1)
+            self.price_stoploss = round(self.enter_price + (self.in_atr * 4.5), 1)
         else:
             self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)     
-        self.price_stoploss = round(self.enter_price + (self.in_atr * 2.8), 1)
+            self.price_stoploss = round(self.enter_price + (self.in_atr * 3.5), 1)
         print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
         self.amount = self.balance/current_price
         self.position = "short"

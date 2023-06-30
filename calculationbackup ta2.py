@@ -66,6 +66,7 @@ df_high = df['High']
 df_low = df['Low']
 df_close = df['Close']
 
+money_flow = ta.volume.money_flow_index(df['High'], df['Low'], df['Close'], df['Volume'])
 ma =ta.trend.macd_diff(df['Close'], window_slow=13, window_fast=6, window_sign=4)
 
 close_list = (df['Close'].tail(20)).to_list()
@@ -86,6 +87,8 @@ print(vwap_short_check)
 print(vwap_long_check)
 print(vwap_short_check_bool)
 print(vwap_long_check_bool)
+
+macd = ta.trend.macd(df_close)
 atr = ta.volatility.AverageTrueRange(df_high, df_low, df_close)
 atr_indicator = atr.average_true_range()
 
@@ -105,8 +108,8 @@ df["bl"] = bl.tail(400)
 df['d'] = d
 df['k'] = k
 df['vwap'] = vvvwap
-df['vwap+20'] = df['vwap'] + 10
-df['vwap-20'] = df['vwap'] - 10
+df['vwap+10'] = df['vwap'] + 10
+df['vwap-10'] = df['vwap'] - 10
 df['ss'] = ss.tail(400)
 
 # print(bhi.tail(30).tolist())
@@ -114,9 +117,9 @@ df['ss'] = ss.tail(400)
 # print(d)
 # print(k)
 # print(d_two)
-# print(k_two)
+print(money_flow)
 # print(type(df['vwap']))
-df.plot(x="openTime", y=["Close", 'vwap','vwap+20','vwap-20'],
+df.plot(x="openTime", y=["Close", 'vwap','vwap+10','vwap-10'],
         kind="line", figsize=(25, 10))
 # df.plot(x="openTime", y=["d", "k"],
 #         kind="line", figsize=(10, 10))
