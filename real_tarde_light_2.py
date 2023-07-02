@@ -34,7 +34,7 @@ class Data_collector:
         self.params = {
         'symbol': 'btcusdt',
         'interval': '3m',
-        'limit': "41"
+        'limit': "40"
             }
         self.main_df = self.get_prev_data()
         self.trade = BinanceTrade()

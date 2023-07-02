@@ -17,7 +17,7 @@ class Data_collector:
         self.commission = 0.01 #25배 레버리지 수수료 . 기본 수수료는 0.0004
         self.main_df = pd.DataFrame()
         self.symbol = "btcusdt"
-        self.interval = "5m"
+        self.interval = "3m"
         self.in_atr = None
         self.price_profit = None
         self.price_stoploss = None
@@ -32,7 +32,7 @@ class Data_collector:
         self.url = 'https://fapi.binance.com/fapi/v1/klines'
         self.params = {
         'symbol': 'BTCUSDT',
-        'interval': '5m',
+        'interval': '3m',
         'limit': "230"
             }
         self.main_df = self.get_prev_data()
@@ -48,14 +48,15 @@ class Data_collector:
         isClosed = data['k']['x']
         df2 = {'openTime': openTime, 'Open': Open, 'High': High, 'Low': Low, 'Close': Close, 'Volume': Volume}
         self.live_edit(df2) 
-        # print((self.main_df['Close'].tail(10)).tolist())
         if self.position_status == False:
-            self.open_position(float(df2['Close']), self.main_df['Close'].to_list(), self.main_df['Open'].to_list(), self.main_df['High'].to_list(), self.main_df['Low'].to_list())
+            self.open_position(float(df2['Close']), (self.main_df['Close'].tail(5)).to_list() , self.main_df['Open'].to_list(), self.main_df['High'].to_list(), self.main_df['Low'].to_list())
+            #close 리스트는 element 5개
         elif self.position_status == True:
             self.close_position(float(df2['Close']))
         if isClosed == True:
             self.main_df = self.add_frame(df2)
-            time.sleep(10) # 새 분봉에서 10초 관망   
+            # os.system('w32tm /resync')  
+        self.balance = float(self.trade.balance())
 
     def on_close(self, ws):
         print("closed")
@@ -74,18 +75,19 @@ class Data_collector:
                                             'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore']) 
         self.main_df = self.main_df.drop(self.main_df.columns[[6,7,8,9,10,11]], axis=1)
         self.main_df.loc[len(self.main_df)] = pd.Series()
+        self.main_df = self.main_df.iloc[:-1]
         return self.main_df
 
     def add_frame(self, df2):
         self.main_df.loc[len(self.main_df)] = df2
         return self.main_df
 
-    def live_edit(self, df2): #dataframe은 row 250개 이하로 고정한다. 만약 row가 250개를 넘으면 30개를 지우고 index를 초기화 시킨다.   
+    def live_edit(self, df2):    
         df2 = list(df2.values())
         self.main_df.iloc[-1] = df2
         length_df = len(self.main_df)
-        if length_df == 250:
-            self.main_df = self.main_df.drop(self.main_df.index[:30])
+        if length_df == 55:
+            self.main_df = self.main_df.drop(self.main_df.index[:15])
             self.main_df = self.main_df.reset_index(drop=True)
 
     def EMA(self, df_close):
