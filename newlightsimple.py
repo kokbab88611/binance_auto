@@ -33,7 +33,7 @@ class Data_collector:
         self.params = {
         'symbol': 'btcusdt',
         'interval': '3m',
-        'limit': "40"
+        'limit': "70"
             }
         self.main_df = self.get_prev_data()
         self.trade = BinanceTrade()
@@ -59,6 +59,7 @@ class Data_collector:
             self.close_position(float(df2['Close']))
         if isClosed == True:
             self.main_df = self.add_frame(df2)
+            time.sleep(5)
             # os.system('w32tm /resync')  
         self.balance = float(self.trade.balance())
 
@@ -90,14 +91,14 @@ class Data_collector:
         df2 = list(df2.values())
         self.main_df.iloc[-1] = df2
         length_df = len(self.main_df)
-        if length_df == 55:
-            self.main_df = self.main_df.drop(self.main_df.index[:15])
+        if length_df == 80:
+            self.main_df = self.main_df.drop(self.main_df.index[:11])
             self.main_df = self.main_df.reset_index(drop=True)
 
-    def EMA(self, df_close):
+    def EMA(self):
         # ema_fifty = ta.trend.EMAIndicator(df_close, window=50)
-        ema_fourteen = ta.trend.EMAIndicator(df_close, window=14)
-        ema_eight = ta.trend.EMAIndicator(df_close, window=8)
+        ema_fourteen = ta.trend.EMAIndicator(self.main_df['Close'], window=14)
+        ema_eight = ta.trend.EMAIndicator(self.main_df['Close'], window=8)
         # ema_hundred = ta.trend.EMAIndicator(df_close, window=100) 
         # ema_fifty_indicator = ema_fifty.ema_indicator()
         ema_fourteen_indicator = ema_fourteen.ema_indicator()
@@ -135,8 +136,11 @@ class Data_collector:
         return d_two, k_two
 
     def decision(self, current_price, close_list, open_list, high_list, low_list):
-        df_close = pd.Series(close_list)
-        ema_fourteen_list, ema_eight_list = self.EMA(df_close)
+        self.main_df['High'] = pd.to_numeric(self.main_df['High'], errors='coerce')
+        self.main_df['Low'] = pd.to_numeric(self.main_df['Low'], errors='coerce')
+        self.main_df['Close'] = pd.to_numeric(self.main_df['Close'], errors='coerce')
+        self.main_df['Volume'] = pd.to_numeric(self.main_df['Volume'], errors='coerce')     
+        ema_fourteen_list, ema_eight_list = self.EMA()
         two_d, two_k = self.stochRSI()
         # current_atr = ATR(self.main_df)
         prev_d, curr_d = two_d[0], two_d[1]
@@ -154,19 +158,18 @@ class Data_collector:
               f'prev_grad_ema_fourteen > 0: {prev_grad_ema_fourteen > 0}\n'
               f'curernt_grad_ema_fourteen > 0 : {curernt_grad_ema_fourteen > 0 }\nprev_grad_ema_eight > 0: {prev_grad_ema_eight > 0}\n'
               f'curernt_grad_ema_eight > 0: {curernt_grad_ema_eight > 0}\n'
-              f'current_price > curr_open: {current_price > curr_open}\ndanger_check: {self.danger_check(high_list, low_list)}\n'
-              f'peak: {self.peak_check()}'
-              f'kd long: {kd_prev_diff > 0 and kd_curr_diff > 0}') 
+              f'current_price > curr_open: {current_price > curr_open}\ndanger_check: {self.danger_check(high_list, low_list)}\n')
+            #   f'peak: {self.peak_check()}')
 
         if ((kd_prev_diff > 0 and kd_curr_diff > 0) and prev_grad_ema_fourteen > 0 and 
             curernt_grad_ema_fourteen > 0 and prev_grad_ema_eight > 0 and curernt_grad_ema_eight > 0 and 
             current_price > curr_open and 
-            self.danger_check(high_list, low_list) and self.peak_check() != "nl"): #prev_open >= prev_ema_fifty and (curr_open >= curr_ema_fifty or current_price > curr_ema_fifty) and prev_open > prev_ema_hundred and curr_open > curr_ema_hundred 
+            self.danger_check(high_list, low_list)): #and self.peak_check() != "nl" #prev_open >= prev_ema_fifty and (curr_open >= curr_ema_fifty or current_price > curr_ema_fifty) and prev_open > prev_ema_hundred and curr_open > curr_ema_hundred 
             return "long"
-        elif ((kd_prev_diff < 0 and kd_curr_diff < 0) and prev_grad_ema_fourteen > 0 and 
+        elif ((kd_prev_diff < 0 and kd_curr_diff < 0) and prev_grad_ema_fourteen < 0 and 
             curernt_grad_ema_fourteen < 0 and prev_grad_ema_eight < 0 and curernt_grad_ema_eight < 0 and 
             current_price < curr_open and 
-            self.danger_check(high_list, low_list) and self.peak_check() != "ns"): # prev_open <= prev_ema_fifty and (curr_open <= curr_ema_fifty or current_price < curr_ema_fifty) and prev_open < prev_ema_hundred and curr_open < curr_ema_hundred 
+            self.danger_check(high_list, low_list)): # and self.peak_check() != "ns" # prev_open <= prev_ema_fifty and (curr_open <= curr_ema_fifty or current_price < curr_ema_fifty) and prev_open < prev_ema_hundred and curr_open < curr_ema_hundred 
             return "short"
         else:
             return "pass"
