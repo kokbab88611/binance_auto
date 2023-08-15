@@ -8,8 +8,12 @@ from binance.cm_futures import CMFutures
 import websocket as wb 
 import json
 import time
+import asyncio
 import os
 import logging
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegressionCV, LogisticRegression, LinearRegression
+from sklearn.preprocessing import LabelEncoder
 from binance.um_futures import UMFutures
 # from binance.lib.utils import config_logging
 from binance.error import ClientError
@@ -28,6 +32,8 @@ class Data_collector:
         self.position = None 
         self.enter_price = None
         self.quantity = None
+        self.ai_result = None
+
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.url = 'https://fapi.binance.com/fapi/v1/klines'
         self.params = {
@@ -50,9 +56,16 @@ class Data_collector:
         Close = data['k']['c']
         Volume = data['k']['v']
         isClosed = data['k']['x']
-        df2 = {'openTime': openTime, 'Open': Open, 'High': High, 'Low': Low, 'Close': Close, 'Volume': Volume}
+        Status = (float(Open) - float(Close)) > 0 
+        if Status == True:
+            Status = "bearish"
+        else:
+            Status = "bullish"
+        self.balance = float(self.trade.balance())
+        df2 = {'openTime': openTime, 'Open': Open, 'High': High, 'Low': Low, 'Close': Close, 'Volume': Volume, 'Category': Status}
         self.live_edit(df2) 
         if self.position_status == False:
+            asyncio.run(self.prediction_model())
             self.open_position(float(df2['Close']), (self.main_df['Close'].tail(5)).to_list() , self.main_df['Open'].to_list(), self.main_df['High'].to_list(), self.main_df['Low'].to_list())
             #close 리스트는 element 5개
         elif self.position_status == True:
@@ -61,7 +74,6 @@ class Data_collector:
             self.main_df = self.add_frame(df2)
             time.sleep(5)
             # os.system('w32tm /resync')  
-        self.balance = float(self.trade.balance())
 
     def on_close(self, ws):
         print("closed")
@@ -81,6 +93,7 @@ class Data_collector:
         self.main_df = self.main_df.drop(self.main_df.columns[[6,7,8,9,10,11]], axis=1)
         self.main_df.loc[len(self.main_df)] = pd.Series()
         self.main_df = self.main_df.iloc[:-1]
+        self.main_df['Category'] = np.where(self.main_df['Close'] > self.main_df['Open'], 'bullish', 'bearish')
         return self.main_df
 
     def add_frame(self, df2):
@@ -135,6 +148,22 @@ class Data_collector:
         k_two = k.tail(2).tolist()
         return d_two, k_two
 
+    async def prediction_model(self):
+        X_train_category, X_test_category, y_train_category, y_test_category = train_test_split(self.main_df[['Close', 'Volume']], self.main_df['Category'],
+                                                                    test_size=0.2, random_state=42)
+        df_train_category = pd.concat([X_train_category, y_train_category], axis=1).dropna()
+        X_train_category = df_train_category.iloc[:, :-1]
+        y_train_category = df_train_category.iloc[:, -1]
+
+        model_category = LogisticRegression(max_iter=1000)
+
+        model_category.fit(X_train_category, y_train_category)
+
+        X_new_category = X_test_category.tail(1)  # Get the last 5 rows of category test data
+        # Predict Category for Next 5 Candles
+        predicted_category = model_category.predict(X_new_category)
+        self.ai_result = predicted_category[0]
+
     def decision(self, current_price, close_list, open_list, high_list, low_list):
         self.main_df['High'] = pd.to_numeric(self.main_df['High'], errors='coerce')
         self.main_df['Low'] = pd.to_numeric(self.main_df['Low'], errors='coerce')
@@ -152,24 +181,27 @@ class Data_collector:
         curernt_grad_ema_fourteen = ema_fourteen_list[-1] - ema_fourteen_list[-2]    
         prev_grad_ema_eight = ema_eight_list[-2] - ema_eight_list[-3]
         curernt_grad_ema_eight = ema_eight_list[-1] - ema_eight_list[-2]  
-
+    
         print('__________________________________________________________________________________________________________________________________________________\n'
               f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
               f'prev_grad_ema_fourteen > 0: {prev_grad_ema_fourteen > 0}\n'
               f'curernt_grad_ema_fourteen > 0 : {curernt_grad_ema_fourteen > 0 }\nprev_grad_ema_eight > 0: {prev_grad_ema_eight > 0}\n'
               f'curernt_grad_ema_eight > 0: {curernt_grad_ema_eight > 0}\n'
-              f'current_price > curr_open: {current_price > curr_open}\ndanger_check: {self.danger_check(high_list, low_list)}\n')
+              f'current_price > curr_open: {current_price > curr_open}\ndanger_check: {self.danger_check(high_list, low_list)}\n'
+              f'AI: {self.ai_result}\n')
             #   f'peak: {self.peak_check()}')
 
         if ((kd_prev_diff > 0 and kd_curr_diff > 0) and prev_grad_ema_fourteen > 0 and 
             curernt_grad_ema_fourteen > 0 and prev_grad_ema_eight > 0 and curernt_grad_ema_eight > 0 and 
             current_price > curr_open and 
-            self.danger_check(high_list, low_list)): #and self.peak_check() != "nl" #prev_open >= prev_ema_fifty and (curr_open >= curr_ema_fifty or current_price > curr_ema_fifty) and prev_open > prev_ema_hundred and curr_open > curr_ema_hundred 
+            self.danger_check(high_list, low_list) and
+            self.ai_result == "bullish"): #and self.peak_check() != "nl" #prev_open >= prev_ema_fifty and (curr_open >= curr_ema_fifty or current_price > curr_ema_fifty) and prev_open > prev_ema_hundred and curr_open > curr_ema_hundred 
             return "long"
         elif ((kd_prev_diff < 0 and kd_curr_diff < 0) and prev_grad_ema_fourteen < 0 and 
             curernt_grad_ema_fourteen < 0 and prev_grad_ema_eight < 0 and curernt_grad_ema_eight < 0 and 
             current_price < curr_open and 
-            self.danger_check(high_list, low_list)): # and self.peak_check() != "ns" # prev_open <= prev_ema_fifty and (curr_open <= curr_ema_fifty or current_price < curr_ema_fifty) and prev_open < prev_ema_hundred and curr_open < curr_ema_hundred 
+            self.danger_check(high_list, low_list) and
+            self.ai_result == "bearish"): # and self.peak_check() != "ns" # prev_open <= prev_ema_fifty and (curr_open <= curr_ema_fifty or current_price < curr_ema_fifty) and prev_open < prev_ema_hundred and curr_open < curr_ema_hundred 
             return "short"
         else:
             return "pass"
@@ -198,11 +230,10 @@ class Data_collector:
                 self.position_status = False
                 time.sleep(30)
 
-
     def open_position(self, current_price, close_list, open_list, high_list, low_list):
         status = self.decision(current_price, close_list, open_list, high_list, low_list)
         self.balance = float(self.trade.balance())
-        self.quantity = round(((self.balance * 25) / current_price) * 0.85,3)
+        self.quantity = round(((self.balance * 25) / current_price) * 0.95,3)
         if status == "long" and self.position_status == False: #롱
             self.trade.order("BTCUSDT", "BUY", False, quantity=self.quantity)
             self.long(current_price)
@@ -214,8 +245,8 @@ class Data_collector:
 
     def long(self, current_price):
         self.enter_price = current_price
-        self.price_profit = round(self.enter_price + 40, 1)
-        self.price_stoploss = round(self.enter_price - 70, 1)
+        self.price_profit = round(self.enter_price + 5, 1)
+        self.price_stoploss = round(self.enter_price - 10, 1)
         print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
         self.amount = self.balance/current_price
         self.position = "long"
@@ -225,14 +256,13 @@ class Data_collector:
     # sleep을하는 순간 프레임이 업데이트가 안됨
     def short(self, current_price):
         self.enter_price = current_price
-        self.price_profit = round(self.enter_price - 40, 1)
-        self.price_stoploss = round(self.enter_price + 70, 1)
+        self.price_profit = round(self.enter_price - 5, 1)
+        self.price_stoploss = round(self.enter_price + 10, 1)
         print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
         self.amount = self.balance/current_price
         self.position = "short"
         self.position_status = True
         print(f"숏: {current_price} (실제 진입 가격은 다를 수 있음)" )    
-
 
 class BinanceTrade:
     def __init__(self) -> None:
@@ -252,8 +282,8 @@ class BinanceTrade:
     def balance(self):
         try:
             response = self.um_futures_client.balance()
-            balance = next(x for x in response if x['asset'] == "USDT")['balance']
-            return balance
+            balance = float(next(x for x in response if x['asset'] == "USDT")['balance'])
+            return balance * 0.9
         except ClientError as error:
             logging.error(f"에러:{error.status_code} 에러코드:{error.error_code} 에러 메세지:{error.error_message}")
     
@@ -272,6 +302,24 @@ class BinanceTrade:
             print(response)
         except ClientError as error:
             logging.error(f"에러:{error.status_code} 에러코드:{error.error_code} 에러 메세지:{error.error_message}")
+
+# class AiDecision:  
+#     def predcition_model(main_df):
+#         X_train_category, X_test_category, y_train_category, y_test_category = train_test_split(main_df[['Close', 'Volume']], main_df['Category'],
+#                                                                       test_size=0.2, random_state=42)
+#         df_train_category = pd.concat([X_train_category, y_train_category], axis=1).dropna()
+#         X_train_category = df_train_category.iloc[:, :-1]
+#         y_train_category = df_train_category.iloc[:, -1]
+
+#         model_category = LogisticRegression(max_iter=1000)
+
+#         model_category.fit(X_train_category, y_train_category)
+
+#         X_new_category = X_test_category.tail(1)  # Get the last 5 rows of category test data
+#         # Predict Category for Next 5 Candles
+#         predicted_category = model_category.predict(X_new_category)
+
+#         return predicted_category[0]
 
 if __name__ == "__main__":
     bot = Data_collector()

@@ -1,6 +1,5 @@
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegressionCV, LogisticRegression, LinearRegression
-from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import LabelEncoder
 import requests
 import ta
@@ -10,8 +9,8 @@ import pandas as pd
 url = 'https://fapi.binance.com/fapi/v1/klines'
 params = {
     'symbol': 'btcusdt',
-    'interval': '3m',
-    'limit': "1000"
+    'interval': '5m',
+    'limit': "100"
 }
 
 response = requests.get(url, params=params)
@@ -25,7 +24,13 @@ df_main['Close'] = pd.to_numeric(df_main['Close'], errors='coerce')
 df_main['Volume'] = pd.to_numeric(df_main['Volume'], errors='coerce')
 df_main['Open'] = pd.to_numeric(df_main['Open'], errors='coerce')
 df_main['Category'] = np.where(df_main['Close'] > df_main['Open'], 'bullish', 'bearish')
-df_main['PrevClose'] = df_main['Close'].shift(1)
+
+def stochRSI():
+    rsi = ta.momentum.StochRSIIndicator(df_main['Close'], window = 14)
+    d = rsi.stochrsi_d()
+    k = rsi.stochrsi_k()
+    df_main['d'] = d 
+    df_main['k'] = k    
 
 def EMA():
     ema_fourteen = ta.trend.EMAIndicator(df_main['Close'], window=14, fillna = True)
@@ -49,49 +54,33 @@ def money_flow_index():
 EMA()
 macd()
 money_flow_index()
-
+stochRSI()
+df_main = df_main.drop(df_main.index[:49])
+df_main = df_main.reset_index(drop=True)
 label_encoder = LabelEncoder()
 df_main['Category'] = label_encoder.fit_transform(df_main['Category'])
 
 # Split the Data
-X_train_category, X_test_category, y_train_category, y_test_category = train_test_split(df_main[['Close', 'Volume','ema14', 'ema8', 'ema5','ma','mfi']], df_main['Category'],
+X_train_category, X_test_category, y_train_category, y_test_category = train_test_split(df_main[['Close', 'Volume','ema14', 'ema8', 'ema5','ma','mfi','d','k']], df_main['Category'],
                                                                       test_size=0.2, random_state=42)
-X_train_close, X_test_close, y_train_close, y_test_close = train_test_split(df_main[['PrevClose', 'Volume','ema14', 'ema8', 'ema5','ma','mfi']], df_main['Close'],
-                                                                test_size=0.2, random_state=42)
 
 # Create the Logistic Regression model for Category prediction
 df_train_category = pd.concat([X_train_category, y_train_category], axis=1).dropna()
 X_train_category = df_train_category.iloc[:, :-1]
 y_train_category = df_train_category.iloc[:, -1]
 
-# Create the Linear Regression model for Close prediction
-df_train_close = pd.concat([X_train_close, y_train_close], axis=1).dropna()
-X_train_close = df_train_close.iloc[:, :-1]
-y_train_close = df_train_close.iloc[:, -1]
-
 # Create the Logistic Regression model for Category prediction
 model_category = LogisticRegression(max_iter=1000)
 model_category.fit(X_train_category, y_train_category)
-
-# Create the Linear Regression model for Close prediction
-model_close = LinearRegression()
-model_close.fit(X_train_close, y_train_close)
 
 # Evaluate the models
 accuracy_category = model_category.score(X_test_category, y_test_category)
 print("Accuracy (Category):", accuracy_category)
 
-mse_close = mean_squared_error(y_test_close, model_close.predict(X_test_close))
-print("Mean Squared Error (Close):", mse_close)
 # Predict Future Candles
 X_new_category = X_test_category.tail(5)  # Get the last 5 rows of category test data
-X_new_close = X_test_close.tail(5)  # Get the last 5 rows of close test data
 
 # Predict Category for Next 5 Candles
 predicted_category = model_category.predict(X_new_category)
 predicted_category_labels = label_encoder.inverse_transform(predicted_category)  # Convert numeric labels to original labels
 print("Predicted Category for Next 5 Candles:", predicted_category_labels)
-
-# Predict Close for Next 5 Candles
-predicted_close = model_close.predict(X_new_close)
-print("Predicted Close for Next 5 Candles:", predicted_close)
