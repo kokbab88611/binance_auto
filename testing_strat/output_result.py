@@ -31,6 +31,7 @@ class Data_collector:
         self.quantity = None
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.url = 'https://fapi.binance.com/fapi/v1/klines'
+        self.buysell = '/futures/data/takerlongshortRatio'
         self.params = {
         'symbol': 'btcusdt',
         'interval': '3m',
@@ -50,9 +51,12 @@ class Data_collector:
         Low = data['k']['l']
         Close = data['k']['c']
         Volume = data['k']['v']
+        baseVol = data['k']['V']
+        quoteVol = data['k']['Q']
         isClosed = data['k']['x']
-        df2 = {'openTime': openTime, 'Open': Open, 'High': High, 'Low': Low, 'Close': Close, 'Volume': Volume}
-        self.live_edit(df2) 
+        df2 = {'openTime': openTime, 'Open': Open, 'High': High, 'Low': Low, 'Close': Close, 'Volume': Volume, 'baseVol': baseVol, 'quoteVol': quoteVol }
+        self.live_edit(df2)
+        print(df2)
         if self.position_status == False:
             self.open_position(float(df2['Close']), (self.main_df['Close'].tail(5)).to_list() , self.main_df['Open'].to_list(), self.main_df['High'].to_list(), self.main_df['Low'].to_list())
             #close 리스트는 element 5개
@@ -78,7 +82,7 @@ class Data_collector:
         response = response.json()
         self.main_df = pd.DataFrame(response, columns =['openTime', 'Open', 'High', 'Low', 'Close', 'Volume', 'closeTime',
                                             'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore']) 
-        self.main_df = self.main_df.drop(self.main_df.columns[[6,7,8,9,10,11]], axis=1)
+        self.main_df = self.main_df.drop(self.main_df.columns[[6,7,8,11]], axis=1)
         self.main_df.loc[len(self.main_df)] = pd.Series()
         self.main_df = self.main_df.iloc[:-1]
         return self.main_df
@@ -127,13 +131,19 @@ class Data_collector:
         else:
             return "safe"
 
+    def RSI(self):
+        df_close = self.main_df['Close']
+        rsifind = ta.momentum.RSIIndicator(df_close, window = 50)
+        rsi_fifty = rsifind.rsi() 
+        return rsi_fifty
+
     def stochRSI(self):
         df_close = self.main_df['Close']
         rsi = ta.momentum.StochRSIIndicator(df_close, window = 14)
         d = rsi.stochrsi_d()
         k = rsi.stochrsi_k()
-        d_two = d.tail(2).tolist()
-        k_two = k.tail(2).tolist()
+        d_two = d.tail(3).tolist()
+        k_two = k.tail(3).tolist()
         return d_two, k_two
 
     def ATR(self):
@@ -175,17 +185,19 @@ class Data_collector:
         vwap_long_check_bool = current_price > vwap_low_list.iloc[-1] #np.subtract(np.array(close_list, dtype=np.float64), vwap_low_list)[-3:]
 
         two_d, two_k = self.stochRSI()
+
+        RSI_fifty = self.RSI()
         
-        prev_d, curr_d = two_d[0], two_d[1]
-        prev_k, curr_k = two_k[0], two_k[1]
-        
+        prev2_d, prev1_d, curr_d = two_d[0], two_d[1], two_d[2]
+        prev2_k, prev1_k, curr_k = two_k[0], two_k[1], two_k[2]
+
         curr_open = float(open_list[-1])
-        kd_prev_diff, kd_curr_diff = prev_k - prev_d , curr_k - curr_d 
+        # kd_prev_diff, kd_curr_diff = prev_k - prev_d , curr_k - curr_d 
         
-        curr_k_zero, curr_d_zero = curr_k == 0, curr_d == 0
-        curr_k_hund, curr_d_hund = curr_k == 100, curr_d == 100  
-        prev_k_zero, prev_d_zero = prev_k == 0, prev_d == 0
-        prev_k_hund, prev_d_hund = prev_k == 100, prev_d == 100    
+        # curr_k_zero, curr_d_zero = curr_k == 0, curr_d == 0
+        # curr_k_hund, curr_d_hund = curr_k == 100, curr_d == 100  
+        # prev_k_zero, prev_d_zero = prev_k == 0, prev_d == 0
+        # prev_k_hund, prev_d_hund = prev_k == 100, prev_d == 100    
 
         prev_grad_ema_fourteen = ema_fourteen_list[-3] - ema_fourteen_list[-2]
         curernt_grad_ema_fourteen = ema_fourteen_list[-2] - ema_fourteen_list[-1]  
@@ -215,31 +227,31 @@ class Data_collector:
         mfi_short = any(x < 65 for x in mfi) and any(x < 65 for x in mfi)#(mfi[-1] < 60) #(mfi[-3] > 60 and mfi[-2] < 60) and 
         mfi_long = any(x < 30 for x in mfi) and any(x > 30 for x in mfi) #(mfi[-1] > 30) # (mfi[-3] < 20 and mfi[-2] > 20 ) and
 
-        print('########################################################################################\n'
-              f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
-              f'curernt_grad_sma: {curernt_grad_sma}\n'
-              f'current_price > curr_open: {current_price > curr_open}\n'
-              f'peak: {self.peak_check()}\n'
-              f'_______________________________________________________________________________________\n'
-              f'kd long: {(kd_prev_diff > 0 and kd_curr_diff > 0)}\n'
-              f'vwap_long_check_bool: {vwap_long_check_bool}\n'
-              f'macd_long: {macd_long}\n'
-              f'ema_fourteen_long: {ema_fourteen_long}\n'
-              f'ema_eight_long: {ema_eight_long}\n'
-              f'ema_five_long: {ema_five_long}\n'
-              f'mfi_long: {mfi_long}\n'
-              f'sma: {curernt_grad_sma > 0 }\n'
-              f'vwap_long: {vwap_low_list.iloc[-1]}\n'
-              f'_______________________________________________________________________________________\n'
-              f'kd short: {(kd_prev_diff < 0 and kd_curr_diff < 0)}\n'
-              f'vwap_short_check_bool: {vwap_short_check_bool}\n'
-              f'macd_short: {macd_short}\n'
-              f'ema_fourteen_short: {ema_fourteen_short}\n'
-              f'ema_eight_short: {ema_eight_short}\n'
-              f'ema_five_short: {ema_five_short}\n'
-              f'mfi_short: {mfi_short}\n'
-              f'sma<0: {curernt_grad_sma < 0}\n'
-              f'vwap_short: {vwap_high_list.iloc[-1]}\n')
+        # print('########################################################################################\n'
+        #       f'kd_prev_diff > 0: {kd_prev_diff > 0}\nkd_curr_diff > 0: {kd_curr_diff > 0}\n'
+        #       f'curernt_grad_sma: {curernt_grad_sma}\n'
+        #       f'current_price > curr_open: {current_price > curr_open}\n'
+        #       f'peak: {self.peak_check()}\n'
+        #       f'_______________________________________________________________________________________\n'
+        #       f'kd long: {(kd_prev_diff > 0 and kd_curr_diff > 0)}\n'
+        #       f'vwap_long_check_bool: {vwap_long_check_bool}\n'
+        #       f'macd_long: {macd_long}\n'
+        #       f'ema_fourteen_long: {ema_fourteen_long}\n'
+        #       f'ema_eight_long: {ema_eight_long}\n'
+        #       f'ema_five_long: {ema_five_long}\n'
+        #       f'mfi_long: {mfi_long}\n'
+        #       f'sma: {curernt_grad_sma > 0 }\n'
+        #       f'vwap_long: {vwap_low_list.iloc[-1]}\n'
+        #       f'_______________________________________________________________________________________\n'
+        #       f'kd short: {(kd_prev_diff < 0 and kd_curr_diff < 0)}\n'
+        #       f'vwap_short_check_bool: {vwap_short_check_bool}\n'
+        #       f'macd_short: {macd_short}\n'
+        #       f'ema_fourteen_short: {ema_fourteen_short}\n'
+        #       f'ema_eight_short: {ema_eight_short}\n'
+        #       f'ema_five_short: {ema_five_short}\n'
+        #       f'mfi_short: {mfi_short}\n'
+        #       f'sma<0: {curernt_grad_sma < 0}\n'
+        #       f'vwap_short: {vwap_high_list.iloc[-1]}\n')
 
         if (((kd_prev_diff > 0 and kd_curr_diff > 0) or (curr_k_hund and curr_d_hund and prev_k_hund and prev_d_hund)) and 
             ema_fourteen_long and ema_eight_long and ema_five_long and
@@ -267,24 +279,32 @@ class Data_collector:
             return True
         
     def close_position(self, current_price):
+        result = None
         if self.position == "long" and self.position_status:
             if current_price >= self.price_profit or current_price <= self.price_stoploss:
                 self.trade.order("BTCUSDT", "SELL", False, quantity=self.quantity)
                 if current_price >= self.price_profit:
-                    print("수익")
+                    result = "수익"
                 else:
-                    print("손실")
+                    result = "손실"
                 self.position_status = False 
                 self.position = None
+                self.record(result)
         elif self.position == "short" and self.position_status:
             if current_price <= self.price_profit or current_price >= self.price_stoploss:
                 self.trade.order("BTCUSDT", "BUY", False, quantity=self.quantity)
                 if current_price <= self.price_profit:
-                    print("수익")
+                    result = "수익"
                 else:
-                    print("손실")
+                    result = "손실"
                 self.position_status = False
                 self.position = None
+                self.record(result)
+
+    def record(result):
+        print(result)
+        with open('test.txt', 'a') as File:
+            File.write(result)
 
     def open_position(self, current_price, close_list, open_list, high_list, low_list):
         status = self.decision(current_price, close_list, open_list, high_list, low_list)
@@ -313,11 +333,14 @@ class Data_collector:
         else:
             self.price_profit = round(self.enter_price + (self.in_atr * 2), 1)     
             self.price_stoploss = round(self.enter_price - (self.in_atr * 3.5), 1)
-        print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
+        print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}")
+        print("...........................................................")
+        self.record(f"익절: {self.price_profit} 손절: {self.price_stoploss}")
         self.amount = self.balance/current_price
         self.position = "long"
         self.position_status = True
         print(f"롱: {current_price} (실제 진입 가격은 다를 수 있음)")
+        self.record(f"숏: {current_price} (실제 진입 가격은 다를 수 있음)")  
 
     def short(self, current_price):
         self.in_atr = self.ATR()
@@ -334,10 +357,13 @@ class Data_collector:
             self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)     
             self.price_stoploss = round(self.enter_price + (self.in_atr * 3.5), 1)
         print(f"익절: {self.price_profit}\n손절: {self.price_stoploss}") 
+        self.record(f"익절: {self.price_profit} 손절: {self.price_stoploss}")
+        print("...........................................................")
         self.amount = self.balance/current_price
         self.position = "short"
         self.position_status = True
-        print(f"숏: {current_price} (실제 진입 가격은 다를 수 있음)" )    
+        print(f"숏: {current_price} (실제 진입 가격은 다를 수 있음)")
+        self.record(f"숏: {current_price} (실제 진입 가격은 다를 수 있음)")  
 
 class BinanceTrade:
     def __init__(self) -> None:
