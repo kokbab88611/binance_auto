@@ -187,12 +187,30 @@ class DataCollector:
                 elif status == "short":
                     self.short(current_price)
 
+    def set_atr_based_sl_tp(self, entry_price, atr):
+        leverage = 25
+        fee_percent = 0.0500
+        min_profit = 0.01
+        
+        effective_fee_per_transaction = (fee_percent * leverage) / 100
+        total_fee = 2 * effective_fee_per_transaction
+        required_return = total_fee + min_profit
+
+        # Calculate initial ATR-based stop-loss and take-profit
+        stop_loss_price = entry_price - (atr * 1.2)
+        atr_based_tp = entry_price + (atr * 1.75)
+
+        # Adjust take-profit to ensure at least 1% profit after fees
+        minimum_profit_tp = entry_price * (1 + required_return)
+        take_profit_price = max(atr_based_tp, minimum_profit_tp)
+
+        return take_profit_price, stop_loss_price
+
     def long(self, current_price):
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.price_profit = round(self.enter_price + (self.in_atr * 1.75), 1)
-        self.price_stoploss = round(self.enter_price - (self.in_atr * 1.2), 1)
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
         self.position = "long"
         self.position_status = True
         self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity)
@@ -205,8 +223,7 @@ class DataCollector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.price_profit = round(self.enter_price - (self.in_atr * 1.75), 1)
-        self.price_stoploss = round(self.enter_price + (self.in_atr * 1.2), 1)
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
         self.position = "short"
         self.position_status = True
         self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity)
