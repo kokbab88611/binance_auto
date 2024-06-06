@@ -124,8 +124,8 @@ class DataCollector:
 
         # Qualifying conditions
         vwap_qualify = current_price > vwap.iloc[-1]
-        ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-1]
-        ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-1]
+        ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-2]
+        ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-2]
         ema_long_qualify = ema_long.iloc[-1] > poc
         rsi_qualify = rsi.iloc[-1] > 40
         volume_qualify = self.buy_volume > volume_threshold
@@ -141,6 +141,7 @@ class DataCollector:
         print(f"rsi = {rsi_qualify}, {rsi.iloc[-1]}")
         print(f"volume_qualify = {volume_qualify}")
         print(f"high_volume_node_qualify = {high_volume_node_qualify}")
+        print(poc)
         print("=======================")
 
         if vwap_qualify and ema_short_qualify and ema_medium_qualify and ema_long_qualify and rsi_qualify and volume_qualify and high_volume_node_qualify:
