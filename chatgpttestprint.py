@@ -191,8 +191,8 @@ class DataCollector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.price_profit = round(self.enter_price + (self.in_atr * 2), 1)
-        self.price_stoploss = round(self.enter_price - (self.in_atr * 1), 1)
+        self.price_profit = round(self.enter_price + (self.in_atr * 1.75), 1)
+        self.price_stoploss = round(self.enter_price - (self.in_atr * 1.2), 1)
         self.position = "long"
         self.position_status = True
         self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity)
@@ -205,8 +205,8 @@ class DataCollector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)
-        self.price_stoploss = round(self.enter_price + (self.in_atr * 1), 1)
+        self.price_profit = round(self.enter_price - (self.in_atr * 1.75), 1)
+        self.price_stoploss = round(self.enter_price + (self.in_atr * 1.2), 1)
         self.position = "short"
         self.position_status = True
         self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity)

@@ -1,4 +1,0 @@
-Opened short position at 71000.0
-Closed short position at 70912.0 with profit (0.12%)
-Opened short position at 70933.0
-Closed short position at 70980.8 with loss (-0.07%)
