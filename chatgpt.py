@@ -157,27 +157,34 @@ class DataCollector:
 
     def close_position(self, current_price):
         if self.position_status:
-            fee_percent = 0.0500 if self.position == "long" else 0.0200  # Taker fee for long, Maker fee for short
-            effective_fee_percent = fee_percent * self.leverage / 100  # Adjust fee percent by leverage
-            fee_paid = (self.enter_price * self.quantity * effective_fee_percent) + \
-                       (current_price * self.quantity * effective_fee_percent)  # Fee for both entry and exit
-
             if self.position == "long":
-                if current_price >= self.price_profit or current_price <= self.price_stoploss:
-                    side = "SELL"
-                    result = "profit" if current_price >= self.price_profit else "loss"
-            else:  # short
-                if current_price <= self.price_profit or current_price >= self.price_stoploss:
-                    side = "BUY"
-                    result = "profit" if current_price <= self.price_profit else "loss"
-            
+                side = "SELL"
+                fee_percent = 0.0500  # Assuming taker fee for a long position market order
+                result = "profit" if current_price >= self.price_profit else "loss"
+            elif self.position == "short":
+                side = "BUY"
+                fee_percent = 0.0500  # Assuming taker fee for a short position market order
+                result = "profit" if current_price <= self.price_profit else "loss"
+            else:
+                print("Position not defined or invalid position type")
+                return  # Exit if the position type is neither long nor short
+
+            effective_fee_percent = fee_percent * self.leverage / 100
+            fee_paid = (self.enter_price * self.quantity * effective_fee_percent) + \
+                    (current_price * self.quantity * effective_fee_percent)
+
+            profit_loss_amount = (current_price - self.enter_price) * self.quantity if self.position == "long" else \
+                                (self.enter_price - current_price) * self.quantity
+            profit_loss_percent = ((profit_loss_amount - fee_paid) / (self.enter_price * self.quantity)) * 100
+
             self.trade.order(symbol=self.symbol.upper(), side=side, quantity=self.quantity, reduce_only=True)
-            profit_loss_amount = (current_price - self.enter_price) * self.quantity if result == "profit" else (self.enter_price - current_price) * self.quantity
-            profit_loss_percent = (profit_loss_amount / (self.enter_price * self.quantity)) * 100 - (2 * effective_fee_percent)  # Subtract fee from profit percent
-            self.position_status = False
-            log_message = f"Closed {self.position} position at {current_price} with {result} ({profit_loss_percent:.2f}%), Fee Paid: {fee_paid:.2f}"
+            log_message = f"Closed {self.position} position at {current_price} with {result}. " \
+                        f"Profit/Loss: {profit_loss_amount - fee_paid:.2f} USD ({profit_loss_percent:.2f}%), " \
+                        f"Fee Paid: {fee_paid:.2f} USD"
             self.save_result(log_message)
             print(log_message)
+
+            self.position_status = False
             self.position = None
 
     def save_result(self, message):
