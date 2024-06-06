@@ -13,6 +13,7 @@ from binance.error import ClientError
 
 class DataCollector:
     def __init__(self):
+        self.leverage = 25
         self.symbol = "btcusdt"
         self.interval = "3m"
         self.volstream = "wss://fstream.binance.com/ws/btcusdt@aggTrade"
@@ -157,24 +158,48 @@ class DataCollector:
     def close_position(self, current_price):
         if self.position_status:
             if self.position == "long":
-                if current_price >= self.price_profit or current_price <= self.price_stoploss:
-                    self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, reduce_only=True)
-                    result = "profit" if current_price >= self.price_profit else "loss"
-                    profit_loss_percent = ((current_price - self.enter_price) / self.enter_price) * 100
-                    self.position_status = False
-                    self.save_result(f"Closed long position at {current_price} with {result} ({profit_loss_percent:.2f}%)")
-                    print(f"Closed long position at {current_price} with {result} ({profit_loss_percent:.2f}%)")
-                    self.position = None
-
+                side = "SELL"
+                fee_percent = 0.0500  # Assuming taker fee for a long position market order
+                result = "profit" if current_price >= self.price_profit else "loss"
             elif self.position == "short":
-                if current_price <= self.price_profit or current_price >= self.price_stoploss:
-                    self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, reduce_only=True)
-                    result = "profit" if current_price <= self.price_profit else "loss"
-                    profit_loss_percent = ((self.enter_price - current_price) / self.enter_price) * 100
-                    self.position_status = False
-                    self.save_result(f"Closed short position at {current_price} with {result} ({profit_loss_percent:.2f}%)")
-                    print(f"Closed short position at {current_price} with {result} ({profit_loss_percent:.2f}%)")
-                    self.position = None
+                side = "BUY"
+                fee_percent = 0.0500  # Assuming taker fee for a short position market order
+                result = "profit" if current_price <= self.price_profit else "loss"
+            else:
+                print("Position not defined or invalid position type")
+                return  # Exit if the position type is neither long nor short
+
+            # Ensure enter_price and quantity are not zero to avoid division by zero error
+            if self.enter_price == 0 or self.quantity == 0:
+                print(f"Error: enter_price or quantity is zero. enter_price: {self.enter_price}, quantity: {self.quantity}")
+                return
+
+            effective_fee_percent = fee_percent * self.leverage / 100
+            fee_paid = (self.enter_price * self.quantity * effective_fee_percent) + \
+                    (current_price * self.quantity * effective_fee_percent)
+
+            profit_loss_amount = (current_price - self.enter_price) * self.quantity if self.position == "long" else \
+                                (self.enter_price - current_price) * self.quantity
+
+            if self.enter_price * self.quantity == 0:
+                print("Division by zero error avoided: total cost is zero.")
+                return
+
+            profit_loss_percent = ((profit_loss_amount - fee_paid) / (self.enter_price * self.quantity)) * 100
+
+            self.trade.order(symbol=self.symbol.upper(), side=side, quantity=self.quantity)
+            log_message = f"Closed {self.position} position at {current_price} with {result}. " \
+                        f"Profit/Loss: {profit_loss_amount - fee_paid:.2f} USD ({profit_loss_percent:.2f}%), " \
+                        f"Fee Paid: {fee_paid:.2f} USD"
+            self.save_result(log_message)
+            print(log_message)
+
+            self.position_status = False
+            self.position = None
+
+    def save_result(self, message):
+        with open(self.results_file, "a") as file:
+            file.write(message + "\n")
 
     def open_position(self, current_price):
         if not self.position_status:
@@ -251,20 +276,93 @@ class BinanceTrade:
             print(f"Error fetching balance: {e}")
             return None
 
-    def order(self, symbol, side, quantity, reduce_only=False):
+    def order(self, symbol, side, quantity, order_type="MARKET", price=None, stop_price=None):
+        """
+        Place an order on Binance Futures.
+
+        :param symbol: str - The symbol to trade, e.g., 'BTCUSDT'
+        :param side: str - 'BUY' or 'SELL'
+        :param quantity: float - The amount of the asset to trade
+        :param order_type: str - 'LIMIT', 'STOP_MARKET', or 'MARKET'
+        :param price: float - The price at which to execute a LIMIT order
+        :param stop_price: float - The stop price for a STOP_MARKET order
+        :return: dict - Details of the order placed or None if an error occurred
+        """
         try:
-            order = self.um_futures_client.new_order(
-                symbol=symbol,
-                side=side,
-                type="MARKET",
-                quantity=quantity,
-                reduce_only=reduce_only
-            )
+            if order_type == "LIMIT":
+                assert price is not None, "Limit price must be provided for limit orders."
+                order = self.um_futures_client.new_order(
+                    symbol=symbol,
+                    side=side,
+                    type="LIMIT",
+                    timeInForce="GTC",
+                    quantity=quantity,
+                    price=str(price)
+                )
+            elif order_type == "STOP_MARKET":
+                assert stop_price is not None, "Stop price must be provided for stop market orders."
+                order = self.um_futures_client.new_order(
+                    symbol=symbol,
+                    side=side,
+                    type="STOP_MARKET",
+                    quantity=quantity,
+                    stopPrice=str(stop_price)
+                )
+            else:  # Default to MARKET
+                order = self.um_futures_client.new_order(
+                    symbol=symbol,
+                    side=side,
+                    type="MARKET",
+                    quantity=quantity
+                )
             print(f"Order placed: {order}")
             return order
-        except ClientError as e:
-            print(f"Error placing order: {e}")
+        except AssertionError as e:
+            print(f"Order error: {e}")
             return None
+        except ClientError as e:
+            print(f"API error placing order: {e}")
+            return None
+
+    def long(self, current_price):
+        self.in_atr = self.ATR()
+        self.in_atr = round(self.in_atr.iloc[-1], 2)
+        self.enter_price = current_price
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
+        self.position = "long"
+        self.position_status = True
+        
+        # Market order to open the position
+        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity)
+        
+        # Limit order for take profit
+        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
+        
+        # Stop market order for stop loss
+        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
+        
+        self.save_result(f"Opened long position at {current_price}")
+        print(f"Opened long position at {current_price}, Target Profit Price: {self.price_profit}, Stop Loss Price: {self.price_stoploss}")
+
+    def short(self, current_price):
+        self.in_atr = self.ATR()
+        self.in_atr = round(self.in_atr.iloc[-1], 2)
+        self.enter_price = current_price
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, is_long=False)
+        self.position = "short"
+        self.position_status = True
+        
+        # Market order to open the position
+        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity)
+        
+        # Limit order for take profit
+        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
+        
+        # Stop market order for stop loss
+        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
+        
+        self.save_result(f"Opened short position at {current_price}")
+        print(f"Opened short position at {current_price}, Target Profit Price: {self.price_profit}, Stop Loss Price: {self.price_stoploss}")
 
 if __name__ == "__main__":
     bot = DataCollector()

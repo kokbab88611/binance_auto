@@ -169,15 +169,25 @@ class DataCollector:
                 print("Position not defined or invalid position type")
                 return  # Exit if the position type is neither long nor short
 
+            # Ensure enter_price and quantity are not zero to avoid division by zero error
+            if self.enter_price == 0 or self.quantity == 0:
+                print(f"Error: enter_price or quantity is zero. enter_price: {self.enter_price}, quantity: {self.quantity}")
+                return
+
             effective_fee_percent = fee_percent * self.leverage / 100
             fee_paid = (self.enter_price * self.quantity * effective_fee_percent) + \
                     (current_price * self.quantity * effective_fee_percent)
 
             profit_loss_amount = (current_price - self.enter_price) * self.quantity if self.position == "long" else \
                                 (self.enter_price - current_price) * self.quantity
+
+            if self.enter_price * self.quantity == 0:
+                print("Division by zero error avoided: total cost is zero.")
+                return
+
             profit_loss_percent = ((profit_loss_amount - fee_paid) / (self.enter_price * self.quantity)) * 100
 
-            self.trade.order(symbol=self.symbol.upper(), side=side, quantity=self.quantity, reduce_only=True)
+            self.trade.order(symbol=self.symbol.upper(), side=side, quantity=self.quantity)
             log_message = f"Closed {self.position} position at {current_price} with {result}. " \
                         f"Profit/Loss: {profit_loss_amount - fee_paid:.2f} USD ({profit_loss_percent:.2f}%), " \
                         f"Fee Paid: {fee_paid:.2f} USD"
