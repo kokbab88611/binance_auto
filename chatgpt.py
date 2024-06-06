@@ -13,6 +13,7 @@ from binance.error import ClientError
 
 class DataCollector:
     def __init__(self):
+        self.leverage = 25
         self.symbol = "btcusdt"
         self.interval = "3m"
         self.volstream = "wss://fstream.binance.com/ws/btcusdt@aggTrade"
@@ -55,17 +56,24 @@ class DataCollector:
             self.main_df = self.add_frame(df2)
             self.buy_volume = 0
             self.sell_volume = 0
+
         if self.position_status:
             self.close_position(Close)
         else:
             self.open_position(Close)
 
+    def on_close(self, ws):
+        print("WebSocket closed")
+
+    def on_error(self, ws, error):
+        print(f"WebSocket error: {error}")
+
     def websocket_thread_vol(self):
-        ws = wb.WebSocketApp(url=self.volstream, on_message=self.on_message_vol)
+        ws = wb.WebSocketApp(url=self.volstream, on_message=self.on_message_vol, on_close=self.on_close, on_error=self.on_error)
         ws.run_forever()
 
     def websocket_thread_kline(self):
-        ws = wb.WebSocketApp(url=self.websocket_url, on_message=self.on_message_kline)
+        ws = wb.WebSocketApp(url=self.websocket_url, on_message=self.on_message_kline, on_close=self.on_close, on_error=self.on_error)
         ws.run_forever()
 
     def get_prev_data(self) -> pd.DataFrame:
@@ -77,9 +85,104 @@ class DataCollector:
         df = df.astype({'Open': 'float', 'High': 'float', 'Low': 'float', 'Close': 'float', 'Volume': 'float'})
         return df
 
+    def add_frame(self, df2):
+        self.main_df.loc[len(self.main_df)] = df2
+        return self.main_df
+
     def live_edit(self, df2):
         df2 = list(df2.values())
         self.main_df.iloc[-1] = df2
+        if len(self.main_df) == 55:
+            self.main_df = self.main_df.drop(self.main_df.index[:15]).reset_index(drop=True)
+
+    def EMA(self):
+        ema_short = ta.trend.EMAIndicator(self.main_df['Close'], window=9).ema_indicator()
+        ema_medium = ta.trend.EMAIndicator(self.main_df['Close'], window=21).ema_indicator()
+        ema_long = ta.trend.EMAIndicator(self.main_df['Close'], window=50).ema_indicator()
+        return ema_short, ema_medium, ema_long
+
+    def RSI(self):
+        return ta.momentum.RSIIndicator(self.main_df['Close'], window=14).rsi()
+
+    def VWAP(self):
+        return ta.volume.VolumeWeightedAveragePrice(self.main_df['High'], self.main_df['Low'], self.main_df['Close'], self.main_df['Volume']).volume_weighted_average_price()
+
+    def ATR(self):
+        return ta.volatility.AverageTrueRange(self.main_df['High'], self.main_df['Low'], self.main_df['Close']).average_true_range()
+
+    def volume_profile(self):
+        vp = self.main_df.groupby('Close')['Volume'].sum()
+        poc = vp.idxmax()
+        return vp, poc
+
+    def decision(self, current_price):
+        ema_short, ema_medium, ema_long = self.EMA()
+        rsi = self.RSI()
+        vwap = self.VWAP()
+        atr = self.ATR().iloc[-1]
+        vp, poc = self.volume_profile()
+        volume_threshold = atr * 1.5  # Example threshold, can be adjusted
+
+        # Qualifying conditions
+        vwap_qualify = current_price > vwap.iloc[-1]
+        ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-2]
+        ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-2]
+        ema_long_qualify = ema_long.iloc[-1] > poc
+        rsi_qualify = rsi.iloc[-1] > 40
+        volume_qualify = self.buy_volume > volume_threshold
+
+        # Volume Profile Condition: Check if current price is near a high-volume node
+        high_volume_node_qualify = vp.get(current_price, 0) > (vp.mean() + vp.std())
+
+        print("=======================")
+        print(f"vwap_qualify = {vwap_qualify}")
+        print(f"ema_short = {ema_short_qualify}")
+        print(f"ema_medium = {ema_medium_qualify}")
+        print(f"ema_long = {ema_long_qualify}")
+        print(f"rsi = {rsi_qualify}, {rsi.iloc[-1]}")
+        print(f"volume_qualify = {volume_qualify}")
+        print(f"high_volume_node_qualify = {high_volume_node_qualify}")
+        print(poc)
+        print("=======================")
+
+        if vwap_qualify and ema_short_qualify and ema_medium_qualify and ema_long_qualify and rsi_qualify and volume_qualify and high_volume_node_qualify:
+            print("All conditions met for long position.")
+            return "long"
+        elif not vwap_qualify and not ema_short_qualify and not ema_medium_qualify and rsi.iloc[-1] < 60 and self.sell_volume > volume_threshold and high_volume_node_qualify:
+            print("All conditions met for short position.")
+            return "short"
+        else:
+            print("Conditions not met for either position.")
+            return "pass"
+
+    def close_position(self, current_price):
+        if self.position_status:
+            fee_percent = 0.0500 if self.position == "long" else 0.0200  # Taker fee for long, Maker fee for short
+            effective_fee_percent = fee_percent * self.leverage / 100  # Adjust fee percent by leverage
+            fee_paid = (self.enter_price * self.quantity * effective_fee_percent) + \
+                       (current_price * self.quantity * effective_fee_percent)  # Fee for both entry and exit
+
+            if self.position == "long":
+                if current_price >= self.price_profit or current_price <= self.price_stoploss:
+                    side = "SELL"
+                    result = "profit" if current_price >= self.price_profit else "loss"
+            else:  # short
+                if current_price <= self.price_profit or current_price >= self.price_stoploss:
+                    side = "BUY"
+                    result = "profit" if current_price <= self.price_profit else "loss"
+            
+            self.trade.order(symbol=self.symbol.upper(), side=side, quantity=self.quantity, reduce_only=True)
+            profit_loss_amount = (current_price - self.enter_price) * self.quantity if result == "profit" else (self.enter_price - current_price) * self.quantity
+            profit_loss_percent = (profit_loss_amount / (self.enter_price * self.quantity)) * 100 - (2 * effective_fee_percent)  # Subtract fee from profit percent
+            self.position_status = False
+            log_message = f"Closed {self.position} position at {current_price} with {result} ({profit_loss_percent:.2f}%), Fee Paid: {fee_paid:.2f}"
+            self.save_result(log_message)
+            print(log_message)
+            self.position = None
+
+    def save_result(self, message):
+        with open(self.results_file, "a") as file:
+            file.write(message + "\n")
 
     def open_position(self, current_price):
         if not self.position_status:
@@ -92,37 +195,50 @@ class DataCollector:
                 elif status == "short":
                     self.short(current_price)
 
-    def close_position(self, current_price):
-        if self.position_status:
-            if (self.position == "long" and (current_price >= self.price_profit or current_price <= self.price_stoploss)) or \
-               (self.position == "short" and (current_price <= self.price_profit or current_price >= self.price_stoploss)):
-                self.trade.order(symbol=self.symbol.upper(), side="SELL" if self.position == "long" else "BUY", quantity=self.quantity, reduce_only=True)
-                result = "profit" if ((self.position == "long" and current_price >= self.price_profit) or
-                                      (self.position == "short" and current_price <= self.price_profit)) else "loss"
-                profit_loss_percent = ((current_price - self.enter_price) / self.enter_price) * 100 * (1 if self.position == "long" else -1)
-                self.position_status = False
-                self.save_result(f"Closed {self.position} position at {current_price} with {result} ({profit_loss_percent:.2f}%)")
-                print(f"Closed {self.position} position at {current_price} with {result} ({profit_loss_percent:.2f}%)")
+    def set_atr_based_sl_tp(self, entry_price, atr):
+        leverage = 25
+        fee_percent = 0.0500
+        min_profit = 0.01
+        
+        effective_fee_per_transaction = (fee_percent * leverage) / 100
+        total_fee = 2 * effective_fee_per_transaction
+        required_return = total_fee + min_profit
+
+        # Calculate initial ATR-based stop-loss and take-profit
+        stop_loss_price = entry_price - (atr * 1.2)
+        atr_based_tp = entry_price + (atr * 1.75)
+
+        # Adjust take-profit to ensure at least 1% profit after fees
+        minimum_profit_tp = entry_price * (1 + required_return)
+        take_profit_price = max(atr_based_tp, minimum_profit_tp)
+
+        return take_profit_price, stop_loss_price
 
     def long(self, current_price):
+        self.in_atr = self.ATR()
+        self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.in_atr = self.ATR().iloc[-1]
-        self.price_profit = round(self.enter_price + (self.in_atr * 2), 1)
-        self.price_stoploss = round(self.enter_price - (self.in_atr * 1), 1)
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
         self.position = "long"
         self.position_status = True
         self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity)
-        print(f"Opened long position at {current_price}, Profit Target: {self.price_profit}, Stop Loss: {self.price_stoploss}")
+        self.save_result(f"Opened long position at {current_price}")
+        print(f"Opened long position at {current_price}")
+        print(f"Target Profit Price: {self.price_profit}")
+        print(f"Stop Loss Price: {self.price_stoploss}")
 
     def short(self, current_price):
+        self.in_atr = self.ATR()
+        self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.in_atr = self.ATR().iloc[-1]
-        self.price_profit = round(self.enter_price - (self.in_atr * 2), 1)
-        self.price_stoploss = round(self.enter_price + (self.in_atr * 1), 1)
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
         self.position = "short"
         self.position_status = True
         self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity)
-        print(f"Opened short position at {current_price}, Profit Target: {self.price_profit}, Stop Loss: {self.price_stoploss}")
+        self.save_result(f"Opened short position at {current_price}")
+        print(f"Opened short position at {current_price}")
+        print(f"Target Profit Price: {self.price_profit}")
+        print(f"Stop Loss Price: {self.price_stoploss}")
 
     def save_result(self, message):
         with open(self.results_file, "a") as file:
@@ -143,19 +259,93 @@ class BinanceTrade:
             print(f"Error fetching balance: {e}")
             return None
 
-    def order(self, symbol, side, quantity, reduce_only=False):
+    def order(self, symbol, side, quantity, order_type="MARKET", price=None, stop_price=None):
+        """
+        Place an order on Binance Futures.
+
+        :param symbol: str - The symbol to trade, e.g., 'BTCUSDT'
+        :param side: str - 'BUY' or 'SELL'
+        :param quantity: float - The amount of the asset to trade
+        :param order_type: str - 'LIMIT', 'STOP_MARKET', or 'MARKET'
+        :param price: float - The price at which to execute a LIMIT order
+        :param stop_price: float - The stop price for a STOP_MARKET order
+        :return: dict - Details of the order placed or None if an error occurred
+        """
         try:
-            order = self.um_futures_client.new_order(
-                symbol=symbol,
-                side=side,
-                type="MARKET",
-                quantity=quantity,
-                reduce_only=reduce_only
-            )
+            if order_type == "LIMIT":
+                assert price is not None, "Limit price must be provided for limit orders."
+                order = self.um_futures_client.new_order(
+                    symbol=symbol,
+                    side=side,
+                    type="LIMIT",
+                    timeInForce="GTC",
+                    quantity=quantity,
+                    price=str(price)
+                )
+            elif order_type == "STOP_MARKET":
+                assert stop_price is not None, "Stop price must be provided for stop market orders."
+                order = self.um_futures_client.new_order(
+                    symbol=symbol,
+                    side=side,
+                    type="STOP_MARKET",
+                    quantity=quantity,
+                    stopPrice=str(stop_price)
+                )
+            else:  # Default to MARKET
+                order = self.um_futures_client.new_order(
+                    symbol=symbol,
+                    side=side,
+                    type="MARKET",
+                    quantity=quantity
+                )
+            print(f"Order placed: {order}")
             return order
-        except ClientError as e:
-            print(f"Error placing order: {e}")
+        except AssertionError as e:
+            print(f"Order error: {e}")
             return None
+        except ClientError as e:
+            print(f"API error placing order: {e}")
+            return None
+
+    def long(self, current_price):
+        self.in_atr = self.ATR()
+        self.in_atr = round(self.in_atr.iloc[-1], 2)
+        self.enter_price = current_price
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
+        self.position = "long"
+        self.position_status = True
+        
+        # Market order to open the position
+        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity)
+        
+        # Limit order for take profit
+        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
+        
+        # Stop market order for stop loss
+        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
+        
+        self.save_result(f"Opened long position at {current_price}")
+        print(f"Opened long position at {current_price}, Target Profit Price: {self.price_profit}, Stop Loss Price: {self.price_stoploss}")
+
+    def short(self, current_price):
+        self.in_atr = self.ATR()
+        self.in_atr = round(self.in_atr.iloc[-1], 2)
+        self.enter_price = current_price
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, is_long=False)
+        self.position = "short"
+        self.position_status = True
+        
+        # Market order to open the position
+        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity)
+        
+        # Limit order for take profit
+        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
+        
+        # Stop market order for stop loss
+        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
+        
+        self.save_result(f"Opened short position at {current_price}")
+        print(f"Opened short position at {current_price}, Target Profit Price: {self.price_profit}, Stop Loss Price: {self.price_stoploss}")
 
 if __name__ == "__main__":
     bot = DataCollector()
