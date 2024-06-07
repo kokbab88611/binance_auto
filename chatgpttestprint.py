@@ -21,7 +21,7 @@ class DataCollector:
         self.position_status = False
         self.position = None
         self.enter_price = None
-        self.results_file = "trade_results.txt"
+        self.results_file = "trade_results.log"
         self.price_profit = None
         self.price_stoploss = None
 
@@ -151,13 +151,15 @@ class DataCollector:
     def close_position(self, current_price):
         if self.position_status:
             if self.position == "long":
-                side = "SELL"
-                fee_percent = 0.0500  # Assuming taker fee for a long position market order
-                result = "profit" if current_price >= self.price_profit else "loss"
+                if current_price >= self.price_profit or current_price <= self.price_stoploss:
+                    fee_percent = 0.0500  # Assuming taker fee for a long position market order
+                    result = "profit" if current_price >= self.price_profit else "loss"
+                    side = "SELL"
             elif self.position == "short":
-                side = "BUY"
-                fee_percent = 0.0500  # Assuming taker fee for a short position market order
-                result = "profit" if current_price <= self.price_profit else "loss"
+                if current_price <= self.price_profit or current_price >= self.price_stoploss:
+                    fee_percent = 0.0500  # Assuming taker fee for a short position market order
+                    result = "profit" if current_price <= self.price_profit else "loss"
+                    side = "BUY"
             else:
                 print("Position not defined or invalid position type")
                 return  # Exit if the position type is neither long nor short
