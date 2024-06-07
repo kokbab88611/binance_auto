@@ -150,28 +150,25 @@ class DataCollector:
 
     def close_position(self, current_price):
         if self.position_status:
-            close_position = False
+            close_status = False
             fee_percent = None
-            side = None
             result = None
 
             if self.position == "long":
                 if current_price >= self.price_profit or current_price <= self.price_stoploss:
                     fee_percent = 0.0500  # Assuming taker fee for a long position market order
                     result = "profit" if current_price >= self.price_profit else "loss"
-                    side = "SELL"
-                    close_position = True
+                    close_status = True
             elif self.position == "short":
                 if current_price <= self.price_profit or current_price >= self.price_stoploss:
                     fee_percent = 0.0500  # Assuming taker fee for a short position market order
                     result = "profit" if current_price <= self.price_profit else "loss"
-                    side = "BUY"
-                    close_position = True
+                    close_status = True
             else:
                 print("Position not defined or invalid position type")
                 return  # Exit if the position type is neither long nor short
 
-            if close_position:
+            if close_status:
                 effective_fee_percent = fee_percent * self.leverage / 100
                 fee_paid = (self.enter_price * effective_fee_percent) + \
                            (current_price * effective_fee_percent)
@@ -232,7 +229,7 @@ class DataCollector:
         self.position = "long"
         self.position_status = True
 
-        self.save_result(f"Opened long position at {current_price}")
+        self.save_result(f"Opened long position at {current_price} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"Opened long position at {current_price}")
         print(f"Target Profit Price: {self.price_profit}")
         print(f"Stop Loss Price: {self.price_stoploss}")
@@ -245,7 +242,7 @@ class DataCollector:
         self.position = "short"
         self.position_status = True
 
-        self.save_result(f"Opened short position at {current_price}")
+        self.save_result(f"Opened short position at {current_price} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"Opened short position at {current_price}")
         print(f"Target Profit Price: {self.price_profit}")
         print(f"Stop Loss Price: {self.price_stoploss}")
