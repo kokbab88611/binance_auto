@@ -205,28 +205,22 @@ class DataCollector:
     def close_position(self, current_price):
         if self.position_status:
             close_status = False
-            fee_open_percent = 0.0005  # 0.05% as a decimal
-            fee_close_percent = None
+            fee_percent = 0.0005  # 0.05% as a decimal for each transaction (open and close)
+            fee_open_percent = fee_percent  # Opening fee
+            fee_close_percent = fee_percent  # Closing fee
             result = None
 
             if self.position == "long":
-                if current_price >= self.price_profit:
-                    fee_close_percent = 0.0002  # 0.02% for profit close
-                    result = "profit"
-                    close_status = True
-                elif current_price <= self.price_stoploss:
-                    fee_close_percent = 0.0005  # 0.05% for loss close
-                    result = "loss"
-                    close_status = True
+                if current_price >= self.price_profit or current_price <= self.price_stoploss:
+                    result = "profit" if current_price >= self.price_profit else "loss"
+                    close_status = True 
             elif self.position == "short":
-                if current_price <= self.price_profit:
-                    fee_close_percent = 0.0002  # 0.02% for profit close
-                    result = "profit"
+                if current_price <= self.price_profit or current_price >= self.price_stoploss:
+                    result = "profit" if current_price <= self.price_profit else "loss"
                     close_status = True
-                elif current_price >= self.price_stoploss:
-                    fee_close_percent = 0.0005  # 0.05% for loss close
-                    result = "loss"
-                    close_status = True
+            else:
+                print("Position not defined or invalid position type")
+                return  # Exit if the position type is neither long nor short
 
             if close_status:
                 # Calculate effective fee percentages considering leverage
@@ -238,14 +232,23 @@ class DataCollector:
 
                 # Calculate profit or loss
                 if self.position == "long":
-                    profit_loss_amount = current_price - self.enter_price
+                    profit_loss_amount = (current_price - self.enter_price) * self.leverage
                 else:
-                    profit_loss_amount = self.enter_price - current_price
+                    profit_loss_amount = (self.enter_price - current_price) * self.leverage
 
-                profit_loss_percent = ((profit_loss_amount - fee_paid) / self.enter_price) * 100
+                # Calculate profit or loss percentage
+                profit_loss_percent = ((profit_loss_amount - fee_paid) / (self.enter_price * self.leverage)) * 100
 
+                # Determine if it's profit or loss for better clarity in the log message
+                if profit_loss_amount - fee_paid > 0:
+                    result_type = "Profit"
+                else:
+                    result_type = "Loss"
+
+                # Format the log message to include both profit/loss percentage and amount
                 log_message = f"Closed {self.position} position at {current_price} with {result}. " \
-                            f"Profit/Loss: ({profit_loss_percent:.2f}%), "
+                            f"{result_type}: {profit_loss_amount - fee_paid:.2f} USD ({profit_loss_percent:.2f}%), " \
+                            f"Fee Paid: {fee_paid:.2f} USD"
                 self.save_result(log_message)
                 print(log_message)
 
@@ -257,6 +260,7 @@ class DataCollector:
         log_message = f"{current_time} - {message}"
         with open(self.results_file, "a") as file:
             file.write(log_message + "\n")
+
 
     def open_position(self, current_price):
         if not self.position_status:
