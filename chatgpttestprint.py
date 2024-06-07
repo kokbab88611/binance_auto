@@ -5,9 +5,8 @@ import requests
 from threading import Thread
 import websocket as wb
 import json
-import os
 from datetime import datetime
-
+import os 
 class DataCollector:
     def __init__(self):
         self.leverage = 25
