@@ -313,7 +313,7 @@ class DataCollector:
 
         # Calculate initial ATR-based stop-loss and take-profit
         stop_loss_price = entry_price - (atr * 1.2)
-        atr_based_tp = entry_price + (atr * 1.3)
+        atr_based_tp = entry_price + (atr * 1.7)
 
         # Adjust take-profit to ensure at least 1% profit after fees
         minimum_profit_tp = entry_price * (1 + required_return)
