@@ -6,6 +6,7 @@ from threading import Thread
 import websocket as wb
 import json
 import os
+from datetime import datetime
 
 class DataCollector:
     def __init__(self):
@@ -150,41 +151,51 @@ class DataCollector:
 
     def close_position(self, current_price):
         if self.position_status:
+            close_position = False
+            fee_percent = None
+            side = None
+            result = None
+
             if self.position == "long":
                 if current_price >= self.price_profit or current_price <= self.price_stoploss:
                     fee_percent = 0.0500  # Assuming taker fee for a long position market order
                     result = "profit" if current_price >= self.price_profit else "loss"
                     side = "SELL"
+                    close_position = True
             elif self.position == "short":
                 if current_price <= self.price_profit or current_price >= self.price_stoploss:
                     fee_percent = 0.0500  # Assuming taker fee for a short position market order
                     result = "profit" if current_price <= self.price_profit else "loss"
                     side = "BUY"
+                    close_position = True
             else:
                 print("Position not defined or invalid position type")
                 return  # Exit if the position type is neither long nor short
 
-            effective_fee_percent = fee_percent * self.leverage / 100
-            fee_paid = (self.enter_price * effective_fee_percent) + \
-                       (current_price * effective_fee_percent)
+            if close_position:
+                effective_fee_percent = fee_percent * self.leverage / 100
+                fee_paid = (self.enter_price * effective_fee_percent) + \
+                           (current_price * effective_fee_percent)
 
-            profit_loss_amount = (current_price - self.enter_price) if self.position == "long" else \
-                                 (self.enter_price - current_price)
+                profit_loss_amount = (current_price - self.enter_price) if self.position == "long" else \
+                                     (self.enter_price - current_price)
 
-            profit_loss_percent = ((profit_loss_amount - fee_paid) / self.enter_price) * 100
+                profit_loss_percent = ((profit_loss_amount - fee_paid) / self.enter_price) * 100
 
-            log_message = f"Closed {self.position} position at {current_price} with {result}. " \
-                          f"Profit/Loss: {profit_loss_amount - fee_paid:.2f} USD ({profit_loss_percent:.2f}%), " \
-                          f"Fee Paid: {fee_paid:.2f} USD"
-            self.save_result(log_message)
-            print(log_message)
+                log_message = f"Closed {self.position} position at {current_price} with {result}. " \
+                              f"Profit/Loss: {profit_loss_amount - fee_paid:.2f} USD ({profit_loss_percent:.2f}%), " \
+                              f"Fee Paid: {fee_paid:.2f} USD"
+                self.save_result(log_message)
+                print(log_message)
 
-            self.position_status = False
-            self.position = None
+                self.position_status = False
+                self.position = None
 
     def save_result(self, message):
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_message = f"{current_time} - {message}"
         with open(self.results_file, "a") as file:
-            file.write(message + "\n")
+            file.write(log_message + "\n")
 
     def open_position(self, current_price):
         if not self.position_status:
@@ -199,7 +210,7 @@ class DataCollector:
         leverage = 25
         fee_percent = 0.0500
         min_profit = 0.01
-        
+
         effective_fee_per_transaction = (fee_percent * leverage) / 100
         total_fee = 2 * effective_fee_per_transaction
         required_return = total_fee + min_profit
