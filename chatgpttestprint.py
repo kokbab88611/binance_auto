@@ -7,6 +7,8 @@ import websocket as wb
 import json
 from datetime import datetime
 import os 
+
+
 class DataCollector:
     def __init__(self):
         self.leverage = 25
@@ -72,7 +74,7 @@ class DataCollector:
 
     def get_prev_data(self) -> pd.DataFrame:
         url = 'https://fapi.binance.com/fapi/v1/klines'
-        params = {'symbol': self.symbol, 'interval': self.interval, 'limit': 100}
+        params = {'symbol': self.symbol, 'interval': self.interval, 'limit': 500}
         response = requests.get(url, params=params).json()
         df = pd.DataFrame(response, columns=['openTime', 'Open', 'High', 'Low', 'Close', 'Volume', 'closeTime', 'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore'])
         df = df.drop(df.columns[[6, 7, 8, 9, 10, 11]], axis=1)
