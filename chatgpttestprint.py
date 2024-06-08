@@ -178,6 +178,10 @@ class DataCollector:
         # New Volume Ratio Condition
         volume_ratio_qualify = self.buy_volume > self.sell_volume
 
+        # New condition for high volatility surges
+        high_volatility_surge_long = current_price > bb_upper.iloc[-1] and current_price > (self.main_df['Close'].iloc[-1] + atr * 1.5)
+        high_volatility_surge_short = current_price < bb_lower.iloc[-1] and current_price < (self.main_df['Close'].iloc[-1] - atr * 1.5)
+
         # New Candle Comparison Condition
         previous_close = self.main_df['Close'].iloc[-2]
         current_close = self.main_df['Close'].iloc[-1]
@@ -193,6 +197,7 @@ class DataCollector:
         print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {bb_upper.iloc[-1]})")
         print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {bb_lower.iloc[-1]})")
         print(f"macd_qualify = {macd_qualify}")
+        print(f"high_volatility_surge_long = {high_volatility_surge_long}")
         print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
         print(f"adx_qualify = {adx_qualify} ({adx.iloc[-1]})")
         print(f"ichimoku_qualify = {ichimoku_qualify}")
@@ -203,12 +208,12 @@ class DataCollector:
         print("=======================")
 
         if (vwap_qualify and ema_short_qualify and ema_medium_qualify and rsi_qualify and volume_qualify and 
-            bb_upper_qualify and bb_lower_qualify and macd_qualify and stoch_qualify and adx_qualify and 
+            (bb_upper_qualify or high_volatility_surge_long) and bb_lower_qualify and macd_qualify and stoch_qualify and adx_qualify and 
             ichimoku_qualify and volume_ratio_qualify and candle_comparison_long): # and high_volume_node_qualify
             print("All conditions met for long position.")
             return "long"
         elif (not vwap_qualify and not ema_short_qualify and not ema_medium_qualify and rsi.iloc[-1] < 60 and 
-            self.sell_volume > volume_threshold and bb_upper_qualify and bb_lower_qualify and macd_qualify and 
+            self.sell_volume > volume_threshold and bb_upper_qualify and (bb_lower_qualify or high_volatility_surge_short) and macd_qualify and 
             stoch_qualify and adx_qualify and ichimoku_qualify and not volume_ratio_qualify and candle_comparison_short): # and high_volume_node_qualify
             print("All conditions met for short position.")
             return "short"
