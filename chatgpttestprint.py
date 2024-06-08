@@ -289,7 +289,7 @@ class DataCollector:
         if position == "long":
             minimum_profit_tp = entry_price * (1 + 0.002375) #0.2375% 를먹어야 무조건 1 퍼 수익 (수익이 난다는 가정하에 0.02% 수수료 X 25)
             stop_loss_price = entry_price - (atr * 1.3)
-            atr_based_tp = entry_price + (atr * 1.7)
+            atr_based_tp = entry_price + (atr * 1.5)
             take_profit_price = max(atr_based_tp, minimum_profit_tp)
         # Adjust take-profit to ensure at least 1% profit after fees
         if position == "short":
