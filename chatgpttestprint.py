@@ -26,7 +26,7 @@ class DataCollector:
         self.results_file = "trade_results.log"
         self.price_profit = None
         self.price_stoploss = None
-        self.balance = 100
+        self.balance = None
 
     def on_message_vol(self, ws, message):
         data = json.loads(message)
@@ -175,6 +175,15 @@ class DataCollector:
         high_volume_node_threshold = vp.mean() * 0.9  # Slightly more restrictive than before
         # high_volume_node_qualify = vp.get(current_price, 0) > high_volume_node_threshold
 
+        # New Volume Ratio Condition
+        volume_ratio_qualify = self.buy_volume > self.sell_volume
+
+        # New Candle Comparison Condition
+        previous_close = self.main_df['Close'].iloc[-2]
+        current_close = self.main_df['Close'].iloc[-1]
+        candle_comparison_long = current_close > previous_close
+        candle_comparison_short = current_close < previous_close
+
         print("=======================")
         print(f"vwap_qualify = {vwap_qualify}")
         print(f"ema_short = {ema_short_qualify}")
@@ -187,17 +196,20 @@ class DataCollector:
         print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
         print(f"adx_qualify = {adx_qualify} ({adx.iloc[-1]})")
         print(f"ichimoku_qualify = {ichimoku_qualify}")
+        print(f"volume_ratio_qualify = {volume_ratio_qualify} (Buy Volume: {self.buy_volume}, Sell Volume: {self.sell_volume})")
+        print(f"candle_comparison_long = {candle_comparison_long}")
+        print(f"candle_comparison_short = {candle_comparison_short}")
         # print(f"high_volume_node_qualify = {high_volume_node_qualify} ({vp.get(current_price, 0)}/{high_volume_node_threshold})")
         print("=======================")
 
         if (vwap_qualify and ema_short_qualify and ema_medium_qualify and rsi_qualify and volume_qualify and 
             bb_upper_qualify and bb_lower_qualify and macd_qualify and stoch_qualify and adx_qualify and 
-            ichimoku_qualify): # and high_volume_node_qualify
+            ichimoku_qualify and volume_ratio_qualify and candle_comparison_long): # and high_volume_node_qualify
             print("All conditions met for long position.")
             return "long"
         elif (not vwap_qualify and not ema_short_qualify and not ema_medium_qualify and rsi.iloc[-1] < 60 and 
             self.sell_volume > volume_threshold and bb_upper_qualify and bb_lower_qualify and macd_qualify and 
-            stoch_qualify and adx_qualify and ichimoku_qualify): # and high_volume_node_qualify
+            stoch_qualify and adx_qualify and ichimoku_qualify and not volume_ratio_qualify and candle_comparison_short): # and high_volume_node_qualify
             print("All conditions met for short position.")
             return "short"
         else:
@@ -207,9 +219,6 @@ class DataCollector:
     def close_position(self, current_price):
         if self.position_status:
             close_status = False
-            fee_percent = 0.0005  # 0.05% as a decimal for each transaction (open and close)
-            fee_open_percent = fee_percent  # Opening fee
-            fee_close_percent = fee_percent  # Closing fee
             result = None
 
             if self.position == "long":
@@ -225,32 +234,11 @@ class DataCollector:
                 return  # Exit if the position type is neither long nor short
 
             if close_status:
-                # Calculate effective fee percentages considering leverage
-                effective_fee_open_percent = fee_open_percent * self.leverage
-                effective_fee_close_percent = fee_close_percent * self.leverage
-
-                # Calculate the fees paid for opening and closing the position
-                fee_paid = (self.enter_price * effective_fee_open_percent) + (current_price * effective_fee_close_percent)
-
-                # Calculate profit or loss
-                if self.position == "long":
-                    profit_loss_amount = (current_price - self.enter_price) * self.leverage
-                else:
-                    profit_loss_amount = (self.enter_price - current_price) * self.leverage
-
-                # Calculate profit or loss percentage
-                profit_loss_percent = ((profit_loss_amount - fee_paid) / (self.enter_price * self.leverage)) * 100
-
-                # Determine if it's profit or loss for better clarity in the log message
-                if profit_loss_amount - fee_paid > 0:
-                    result_type = "Profit"
-                else:
-                    result_type = "Loss"
+                percent = ((current_price - self.enter_price) / self.enter_price ) * self.leverage * 100
 
                 # Format the log message to include both profit/loss percentage and amount
                 log_message = f"Closed {self.position} position at {current_price} with {result}. " \
-                            f"{result_type}: {profit_loss_amount - fee_paid:.2f} USD ({profit_loss_percent:.2f}%), " \
-                            f"Fee Paid: {fee_paid:.2f} USD"
+                            f"{result}: ({percent:.2f}%)" 
                 self.save_result(log_message)
                 print(log_message)
 
@@ -274,31 +262,31 @@ class DataCollector:
                     self.short(current_price)
 
     def set_atr_based_sl_tp(self, entry_price, atr, position):
-        leverage = 25 
-        taker_fee_percent = 0.0005 
-        maker_fee_percent = 0.0002
-        # min_profit = 0.0004  # 1% minimum profit
-
-        # # Calculate the effective fee per transaction considering leverage
-        # effective_fee_per_transaction = taker_fee_percent * leverage
-        # # Total fee for both entry and exit
-        # total_fee = 2 * effective_fee_per_transaction
-        # position_open_fee = self.balance * (taker_fee_percent * leverage)
-        # position_close_fee_profit =  self.balance * (maker_fee_percent * leverage)
-        # position_close_fee_loss = self.balance * (taker_fee_percent * leverage)
-        print(atr)
+        # leverage = 25 
+        # taker_fee_percent = 0.0005 
+        # maker_fee_percent = 0.0002
+        profit_percentage = 0.000709879 # gain profit from this percentage
+        long_profit_percentage = 1.000709879 
+        short_profit_percentage = 0.999290121
+        long_minimum_tp = entry_price * long_profit_percentage
+        short_minimum_tp = entry_price * short_profit_percentage
+        if atr > 80:
+            atr = 80
         # Total required return to ensure minimum profit after fees
         if position == "long":
-            minimum_profit_tp = entry_price * (1 + 0.002375) #0.2375% 를먹어야 무조건 1 퍼 수익 (수익이 난다는 가정하에 0.02% 수수료 X 25)
+            minimum_profit_tp = entry_price * (1 + profit_percentage) 
             stop_loss_price = entry_price - (atr * 1.3)
-            atr_based_tp = entry_price + (atr * 1.5)
-            take_profit_price = max(atr_based_tp, minimum_profit_tp)
+            atr_based_tp = entry_price + (atr * 1.7)
+            if atr_based_tp < long_minimum_tp:
+                minimum_profit_tp = entry_price * 1.001116977
         # Adjust take-profit to ensure at least 1% profit after fees
         if position == "short":
-            minimum_profit_tp = entry_price * (1 - 0.002375) #0.2375% 를먹어야 무조건 1 퍼 수익 (수익이 난다는 가정하에 0.02% 수수료 X 25)
+            minimum_profit_tp = entry_price * (1 - profit_percentage) 
             stop_loss_price = entry_price + (atr * 1.3)
-            atr_based_tp = entry_price - (atr * 1.5)
-            take_profit_price = min(atr_based_tp, minimum_profit_tp)
+            atr_based_tp = entry_price - (atr * 1.7)
+            if atr_based_tp > short_minimum_tp:
+                minimum_profit_tp = entry_price * 0.9988830227
+
         take_profit_price = max(atr_based_tp, minimum_profit_tp)
 
         return take_profit_price, stop_loss_price
