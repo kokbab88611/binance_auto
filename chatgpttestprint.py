@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 import os 
 
-
 class DataCollector:
     def __init__(self):
         self.leverage = 25
@@ -124,16 +123,6 @@ class DataCollector:
         stoch_d = stoch.stoch_signal()
         return stoch_k, stoch_d
 
-    def MACD(self):
-        macd = ta.trend.MACD(self.main_df['Close'])
-        macd_line = macd.macd()
-        signal_line = macd.macd_signal()
-        return macd_line, signal_line
-
-    def ADX(self):
-        adx = ta.trend.ADXIndicator(high=self.main_df['High'], low=self.main_df['Low'], close=self.main_df['Close'], window=14)
-        return adx.adx()
-
     def ichimoku(self):
         ichimoku = ta.trend.IchimokuIndicator(high=self.main_df['High'], low=self.main_df['Low'], window1=9, window2=26, window3=52)
         ichimoku_base = ichimoku.ichimoku_base_line()
@@ -159,9 +148,7 @@ class DataCollector:
         atr = self.ATR().iloc[-1]
         vp, poc = self.volume_profile()
         bb_middle, bb_upper, bb_lower = self.bollinger_bands()
-        macd_line, signal_line = self.MACD()
         stoch_k, stoch_d = self.stochastic_oscillator()
-        adx = self.ADX()
         ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b = self.ichimoku()
         volume_threshold = atr * 1.5  # Example threshold, can be adjusted
 
@@ -175,9 +162,7 @@ class DataCollector:
         volume_qualify = self.buy_volume > volume_threshold
         bb_upper_qualify = current_price < bb_upper.iloc[-1]
         bb_lower_qualify = current_price > bb_lower.iloc[-1]
-        macd_qualify = macd_line.iloc[-1] > signal_line.iloc[-1]
         stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
-        adx_qualify = adx.iloc[-1] > 25  # ADX above 25 indicates a strong trend
 
         # Ichimoku Cloud Conditions
         ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
@@ -185,7 +170,6 @@ class DataCollector:
 
         # Less Restrictive Volume Profile Condition
         high_volume_node_threshold = vp.mean() * 0.9  # Slightly more restrictive than before
-        # high_volume_node_qualify = vp.get(current_price, 0) > high_volume_node_threshold
 
         # New Volume Ratio Condition
         volume_ratio_qualify = self.buy_volume > self.sell_volume
@@ -209,25 +193,22 @@ class DataCollector:
         print(f"volume_qualify = {volume_qualify}")
         print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {bb_upper.iloc[-1]})")
         print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {bb_lower.iloc[-1]})")
-        print(f"macd_qualify = {macd_qualify}")
         print(f"high_volatility_surge_long = {high_volatility_surge_long}")
         print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
-        print(f"adx_qualify = {adx_qualify} ({adx.iloc[-1]})")
         print(f"ichimoku_qualify = {ichimoku_qualify}")
         print(f"volume_ratio_qualify = {volume_ratio_qualify} (Buy Volume: {self.buy_volume}, Sell Volume: {self.sell_volume})")
         print(f"candle_comparison_long = {candle_comparison_long}")
         print(f"candle_comparison_short = {candle_comparison_short}")
-        # print(f"high_volume_node_qualify = {high_volume_node_qualify} ({vp.get(current_price, 0)}/{high_volume_node_threshold})")
         print("=======================")
 
         if (vwap_qualify and ema_short_qualify and ema_medium_qualify and rsi_qualify and volume_qualify and 
-            (bb_upper_qualify or high_volatility_surge_long) and bb_lower_qualify and macd_qualify and stoch_qualify and adx_qualify and 
-            ichimoku_qualify and volume_ratio_qualify and rsi_uptrend and candle_comparison_long and ema_uptrend): # and high_volume_node_qualify
+            (bb_upper_qualify or high_volatility_surge_long) and bb_lower_qualify and stoch_qualify and 
+            ichimoku_qualify and volume_ratio_qualify and rsi_uptrend and candle_comparison_long and ema_uptrend): 
             print("All conditions met for long position.")
             return "long"
         elif (not vwap_qualify and not ema_short_qualify and not ema_medium_qualify and rsi.iloc[-1] < 50 and 
-            self.sell_volume > volume_threshold and bb_upper_qualify and (bb_lower_qualify or high_volatility_surge_short) and macd_qualify and 
-            stoch_qualify and adx_qualify and rsi_downtrend and ichimoku_qualify and not volume_ratio_qualify and candle_comparison_short): # and high_volume_node_qualify
+            self.sell_volume > volume_threshold and bb_upper_qualify and (bb_lower_qualify or high_volatility_surge_short) and 
+            stoch_qualify and rsi_downtrend and ichimoku_qualify and not volume_ratio_qualify and candle_comparison_short): 
             print("All conditions met for short position.")
             return "short"
         else:
@@ -280,9 +261,6 @@ class DataCollector:
                     self.short(current_price)
 
     def set_atr_based_sl_tp(self, entry_price, atr, position):
-        # leverage = 25 
-        # taker_fee_percent = 0.0005 
-        # maker_fee_percent = 0.0002
         profit_percentage = 0.000709879 # gain profit from this percentage
         long_profit_percentage = 1.000709879 
         short_profit_percentage = 0.999290121
