@@ -142,6 +142,16 @@ class DataCollector:
         ichimoku_span_b = ichimoku.ichimoku_b()
         return ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b
 
+    def check_uptrend(self, ema_short, ema_medium, ema_long):
+        # Check if the current and previous values of shorter EMAs are greater than the next longer EMAs
+        uptrend = (ema_short.iloc[-1] > ema_medium.iloc[-1] > ema_long.iloc[-1]) and \
+                (ema_short.iloc[-2] > ema_medium.iloc[-2] > ema_long.iloc[-2])
+
+    def check_rsi_trend(self, rsi):
+        rsi_uptrend = rsi.iloc[-1] > rsi.iloc[-2] and rsi.iloc[-2] > rsi.iloc[-3]
+        rsi_downtrend = rsi.iloc[-1] < rsi.iloc[-2] and rsi.iloc[-2] < rsi.iloc[-3]
+        return rsi_uptrend, rsi_downtrend
+
     def decision(self, current_price):
         ema_short, ema_medium, ema_long = self.EMA()
         rsi = self.RSI()
@@ -157,8 +167,10 @@ class DataCollector:
 
         # Qualifying conditions
         vwap_qualify = current_price > vwap.iloc[-1]
-        ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-2]
-        ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-2]
+        ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-1]
+        ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-1]
+        ema_uptrend = self.check_uptrend(ema_short, ema_medium, ema_long)
+
         rsi_qualify = rsi.iloc[-1] > 40
         volume_qualify = self.buy_volume > volume_threshold
         bb_upper_qualify = current_price < bb_upper.iloc[-1]
@@ -187,6 +199,7 @@ class DataCollector:
         current_close = self.main_df['Close'].iloc[-1]
         candle_comparison_long = current_close > previous_close
         candle_comparison_short = current_close < previous_close
+        rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
 
         print("=======================")
         print(f"vwap_qualify = {vwap_qualify}")
@@ -209,12 +222,12 @@ class DataCollector:
 
         if (vwap_qualify and ema_short_qualify and ema_medium_qualify and rsi_qualify and volume_qualify and 
             (bb_upper_qualify or high_volatility_surge_long) and bb_lower_qualify and macd_qualify and stoch_qualify and adx_qualify and 
-            ichimoku_qualify and volume_ratio_qualify and candle_comparison_long): # and high_volume_node_qualify
+            ichimoku_qualify and volume_ratio_qualify and rsi_uptrend and candle_comparison_long and ema_uptrend): # and high_volume_node_qualify
             print("All conditions met for long position.")
             return "long"
-        elif (not vwap_qualify and not ema_short_qualify and not ema_medium_qualify and rsi.iloc[-1] < 60 and 
+        elif (not vwap_qualify and not ema_short_qualify and not ema_medium_qualify and rsi.iloc[-1] < 50 and 
             self.sell_volume > volume_threshold and bb_upper_qualify and (bb_lower_qualify or high_volatility_surge_short) and macd_qualify and 
-            stoch_qualify and adx_qualify and ichimoku_qualify and not volume_ratio_qualify and candle_comparison_short): # and high_volume_node_qualify
+            stoch_qualify and adx_qualify and rsi_downtrend and ichimoku_qualify and not volume_ratio_qualify and candle_comparison_short): # and high_volume_node_qualify
             print("All conditions met for short position.")
             return "short"
         else:
