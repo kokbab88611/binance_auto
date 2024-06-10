@@ -157,12 +157,10 @@ class DataCollector:
         ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-1]
         ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-1]
         ema_uptrend = self.check_uptrend(ema_short, ema_medium, ema_long)
-
-        rsi_qualify = rsi.iloc[-1] > 40
         volume_qualify = self.buy_volume > volume_threshold
         bb_upper_qualify = current_price < bb_upper.iloc[-1]
         bb_lower_qualify = current_price > bb_lower.iloc[-1]
-        stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
+        stoch_qualify = 20 < stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
 
         # Ichimoku Cloud Conditions
         ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
@@ -185,11 +183,44 @@ class DataCollector:
         candle_comparison_short = current_close < previous_close
         rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
 
+        # Conditions for Long Position
+        long_safe = [
+            vwap_qualify,
+            ema_short_qualify,
+            ema_medium_qualify,
+            rsi.iloc[-1] > 40,
+            volume_qualify,
+            (bb_upper_qualify or high_volatility_surge_long),
+            bb_lower_qualify,
+            stoch_qualify,
+            ichimoku_qualify,
+            volume_ratio_qualify,
+            rsi_uptrend,
+            candle_comparison_long,
+            ema_uptrend
+        ]
+
+        # Conditions for Short Position
+        short_safe = [
+            not vwap_qualify,
+            not ema_short_qualify,
+            not ema_medium_qualify,
+            rsi.iloc[-1] < 60,
+            self.sell_volume > volume_threshold,
+            bb_upper_qualify,
+            (bb_lower_qualify or high_volatility_surge_short),
+            stoch_qualify,
+            rsi_downtrend,
+            ichimoku_qualify,
+            not volume_ratio_qualify,
+            candle_comparison_short
+        ]
+
         print("=======================")
         print(f"vwap_qualify = {vwap_qualify}")
         print(f"ema_short = {ema_short_qualify}")
         print(f"ema_medium = {ema_medium_qualify}")
-        print(f"rsi = {rsi_qualify}, {rsi.iloc[-1]}")
+        print(f"rsi = {rsi.iloc[-1]}")
         print(f"volume_qualify = {volume_qualify}")
         print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {bb_upper.iloc[-1]})")
         print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {bb_lower.iloc[-1]})")
@@ -201,19 +232,16 @@ class DataCollector:
         print(f"candle_comparison_short = {candle_comparison_short}")
         print("=======================")
 
-        if (vwap_qualify and ema_short_qualify and ema_medium_qualify and rsi_qualify and volume_qualify and 
-            (bb_upper_qualify or high_volatility_surge_long) and bb_lower_qualify and stoch_qualify and 
-            ichimoku_qualify and volume_ratio_qualify and rsi_uptrend and candle_comparison_long and ema_uptrend): 
+        if all(long_safe):
             print("All conditions met for long position.")
             return "long"
-        elif (not vwap_qualify and not ema_short_qualify and not ema_medium_qualify and rsi.iloc[-1] < 50 and 
-            self.sell_volume > volume_threshold and bb_upper_qualify and (bb_lower_qualify or high_volatility_surge_short) and 
-            stoch_qualify and rsi_downtrend and ichimoku_qualify and not volume_ratio_qualify and candle_comparison_short): 
+        elif all(short_safe):
             print("All conditions met for short position.")
             return "short"
         else:
             print("Conditions not met for either position.")
             return "pass"
+
 
     def close_position(self, current_price):
         if self.position_status:
