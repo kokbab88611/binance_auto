@@ -7,6 +7,7 @@ import websocket as wb
 import json
 from datetime import datetime
 import os 
+from smartmoneyconcepts import smc
 
 class DataCollector:
     def __init__(self):
@@ -26,6 +27,7 @@ class DataCollector:
         self.price_profit = None
         self.price_stoploss = None
         self.balance = None
+        self.smc_df = pd.DataFrame(index=self.main_df.index)
 
     def on_message_vol(self, ws, message):
         data = json.loads(message)
@@ -45,7 +47,7 @@ class DataCollector:
         Close = float(data['k']['c'])
         Volume = float(data['k']['v'])
         isClosed = data['k']['x']
-        df2 = {'openTime': openTime, 'Open': Open, 'High': High, 'Low': Low, 'Close': Close, 'Volume': Volume}
+        df2 = {'openTime': openTime, 'open': Open, 'high': High, 'low': Low, 'close': Close, 'volume': Volume}
         self.live_edit(df2)
         if isClosed:
             self.main_df = self.add_frame(df2)
@@ -75,9 +77,9 @@ class DataCollector:
         url = 'https://fapi.binance.com/fapi/v1/klines'
         params = {'symbol': self.symbol, 'interval': self.interval, 'limit': 500}
         response = requests.get(url, params=params).json()
-        df = pd.DataFrame(response, columns=['openTime', 'Open', 'High', 'Low', 'Close', 'Volume', 'closeTime', 'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore'])
+        df = pd.DataFrame(response, columns=['openTime', 'open', 'high', 'low', 'close', 'volume', 'closeTime', 'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore'])
         df = df.drop(df.columns[[6, 7, 8, 9, 10, 11]], axis=1)
-        df = df.astype({'Open': 'float', 'High': 'float', 'Low': 'float', 'Close': 'float', 'Volume': 'float'})
+        df = df.astype({'open': 'float', 'high': 'float', 'low': 'float', 'close': 'float', 'volume': 'float'})
         return df
 
     def add_frame(self, df2):
@@ -91,40 +93,73 @@ class DataCollector:
             self.main_df = self.main_df.drop(self.main_df.index[:15]).reset_index(drop=True)
 
     def EMA(self):
-        ema_short = ta.trend.EMAIndicator(self.main_df['Close'], window=9).ema_indicator()
-        ema_medium = ta.trend.EMAIndicator(self.main_df['Close'], window=21).ema_indicator()
-        ema_long = ta.trend.EMAIndicator(self.main_df['Close'], window=50).ema_indicator()
+        ema_short = ta.trend.EMAIndicator(self.main_df['close'], window=9).ema_indicator()
+        ema_medium = ta.trend.EMAIndicator(self.main_df['close'], window=21).ema_indicator()
+        ema_long = ta.trend.EMAIndicator(self.main_df['close'], window=50).ema_indicator()
         return ema_short, ema_medium, ema_long
 
+    def apply_smc_indicators(self):
+        fvg = smc.fvg(self.main_df)
+
+        swing_highs_lows = smc.swing_highs_lows(self.main_df)
+
+        bos_choch = smc.bos_choch(self.main_df, swing_highs_lows)
+
+        ob = smc.ob(self.main_df, swing_highs_lows)
+
+        liquidity = smc.liquidity(self.main_df, swing_highs_lows)
+
+        # Ensure the returned data structures match expected lengths
+
+        self.smc_df['fvg'] = fvg['FVG']
+        self.smc_df['fvg_top'] = fvg['Top']
+        self.smc_df['fvg_bottom'] = fvg['Bottom']
+        self.smc_df['fvg_mitigated'] = fvg['MitigatedIndex']
+        self.smc_df['swing_highs_lows'] = swing_highs_lows['HighLow']
+        self.smc_df['swing_levels'] = swing_highs_lows['Level']
+        self.smc_df['bos'] = bos_choch['BOS']
+        self.smc_df['choch'] = bos_choch['CHOCH']
+        self.smc_df['bos_level'] = bos_choch['Level']
+        self.smc_df['bos_broken_index'] = bos_choch['BrokenIndex']
+        self.smc_df['ob'] = ob['OB']
+        self.smc_df['ob_top'] = ob['Top']
+        self.smc_df['ob_bottom'] = ob['Bottom']
+        self.smc_df['ob_volume'] = ob['OBVolume']
+        self.smc_df['ob_percentage'] = ob['Percentage']
+        self.smc_df['liquidity'] = liquidity['Liquidity']
+        self.smc_df['liquidity_level'] = liquidity['Level']
+        self.smc_df['liquidity_end'] = liquidity['End']
+        self.smc_df['liquidity_swept'] = liquidity['Swept']
+
     def RSI(self):
-        return ta.momentum.RSIIndicator(self.main_df['Close'], window=14).rsi()
+        return ta.momentum.RSIIndicator(self.main_df['close'], window=14).rsi()
 
     def VWAP(self):
-        return ta.volume.VolumeWeightedAveragePrice(self.main_df['High'], self.main_df['Low'], self.main_df['Close'], self.main_df['Volume']).volume_weighted_average_price()
+        return ta.volume.VolumeWeightedAveragePrice(self.main_df['high'], self.main_df['low'], self.main_df['close'], self.main_df['volume']).volume_weighted_average_price()
 
     def ATR(self):
-        return ta.volatility.AverageTrueRange(self.main_df['High'], self.main_df['Low'], self.main_df['Close']).average_true_range()
+        return ta.volatility.AverageTrueRange(self.main_df['high'], self.main_df['low'], self.main_df['close']).average_true_range()
 
     def volume_profile(self):
-        vp = self.main_df.groupby('Close')['Volume'].sum()
+        vp = self.main_df.groupby('close')['volume'].sum()
         poc = vp.idxmax()
         return vp, poc
 
     def bollinger_bands(self):
-        bb = ta.volatility.BollingerBands(close=self.main_df['Close'], window=20, window_dev=2)
+        bb = ta.volatility.BollingerBands(close=self.main_df['close'], window=20, window_dev=2)
         bb_middle = bb.bollinger_mavg()
         bb_upper = bb.bollinger_hband()
         bb_lower = bb.bollinger_lband()
         return bb_middle, bb_upper, bb_lower
 
     def stochastic_oscillator(self):
-        stoch = ta.momentum.StochasticOscillator(self.main_df['High'], self.main_df['Low'], self.main_df['Close'])
+        stoch = ta.momentum.StochasticOscillator(self.main_df['high'], self.main_df['low'], self.main_df['close'])
         stoch_k = stoch.stoch()
         stoch_d = stoch.stoch_signal()
         return stoch_k, stoch_d
 
     def ichimoku(self):
-        ichimoku = ta.trend.IchimokuIndicator(high=self.main_df['High'], low=self.main_df['Low'], window1=9, window2=26, window3=52)
+        ichimoku = ta.trend.IchimokuIndicator(high=self.main_df['high'], low=self.main_df['low'], window1=9, window2=26, window3=52)
         ichimoku_base = ichimoku.ichimoku_base_line()
         ichimoku_conversion = ichimoku.ichimoku_conversion_line()
         ichimoku_span_a = ichimoku.ichimoku_a()
@@ -142,52 +177,57 @@ class DataCollector:
         return rsi_uptrend, rsi_downtrend
 
     def decision(self, current_price):
+        self.apply_smc_indicators()
+
         ema_short, ema_medium, ema_long = self.EMA()
         rsi = self.RSI()
         vwap = self.VWAP()
         atr = self.ATR().iloc[-1]
-        vp, poc = self.volume_profile()
-        bb_middle, bb_upper, bb_lower = self.bollinger_bands()
         stoch_k, stoch_d = self.stochastic_oscillator()
         ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b = self.ichimoku()
-        volume_threshold = atr * 1.5  # Example threshold, can be adjusted
+        volume_threshold = atr * 1.2  # Example threshold, can be adjusted
 
         # Qualifying conditions
         vwap_qualify = current_price > vwap.iloc[-1]
         ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-1]
-        ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-1]
         ema_uptrend = self.check_uptrend(ema_short, ema_medium, ema_long)
+        rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
+
+        rsi_qualify = rsi.iloc[-1] > 40
         volume_qualify = self.buy_volume > volume_threshold
-        bb_upper_qualify = current_price < bb_upper.iloc[-1]
-        bb_lower_qualify = current_price > bb_lower.iloc[-1]
-        stoch_qualify = 20 < stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
+        bb_upper_qualify = current_price < self.bollinger_bands()[1].iloc[-1]
+        bb_lower_qualify = current_price > self.bollinger_bands()[2].iloc[-1]
+        stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
 
         # Ichimoku Cloud Conditions
         ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
                         (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
 
-        # Less Restrictive Volume Profile Condition
-        high_volume_node_threshold = vp.mean() * 0.9  # Slightly more restrictive than before
+        # SMC Conditions
+        print(self.smc_df['swing_highs_lows'].iloc[-1])
+        fvg_condition = self.smc_df['fvg'].iloc[-1] == 1
+        swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
+        bos_condition = self.smc_df['bos'].iloc[-1] == 1
+        ob_condition = self.smc_df['ob'].iloc[-1] == 1
+        liquidity_condition = self.smc_df['liquidity'].iloc[-1] == 1
 
         # New Volume Ratio Condition
         volume_ratio_qualify = self.buy_volume > self.sell_volume
 
         # New condition for high volatility surges
-        high_volatility_surge_long = current_price > bb_upper.iloc[-1] and current_price > (self.main_df['Close'].iloc[-1] + atr * 1.5)
-        high_volatility_surge_short = current_price < bb_lower.iloc[-1] and current_price < (self.main_df['Close'].iloc[-1] - atr * 1.5)
+        high_volatility_surge_long = current_price > self.bollinger_bands()[1].iloc[-1] and current_price > (self.main_df['close'].iloc[-1] + atr * 1.5)
+        high_volatility_surge_short = current_price < self.bollinger_bands()[2].iloc[-1] and current_price < (self.main_df['close'].iloc[-1] - atr * 1.5)
 
         # New Candle Comparison Condition
-        previous_close = self.main_df['Close'].iloc[-2]
-        current_close = self.main_df['Close'].iloc[-1]
+        previous_close = self.main_df['close'].iloc[-2]
+        current_close = self.main_df['close'].iloc[-1]
         candle_comparison_long = current_close > previous_close
         candle_comparison_short = current_close < previous_close
-        rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
 
         # Conditions for Long Position
         long_safe = [
             vwap_qualify,
             ema_short_qualify,
-            ema_medium_qualify,
             rsi.iloc[-1] > 40,
             volume_qualify,
             (bb_upper_qualify or high_volatility_surge_long),
@@ -197,14 +237,14 @@ class DataCollector:
             volume_ratio_qualify,
             rsi_uptrend,
             candle_comparison_long,
-            ema_uptrend
+            #ema_uptrend,
+            swing_high_low_condition
         ]
 
         # Conditions for Short Position
         short_safe = [
             not vwap_qualify,
             not ema_short_qualify,
-            not ema_medium_qualify,
             rsi.iloc[-1] < 60,
             self.sell_volume > volume_threshold,
             bb_upper_qualify,
@@ -213,23 +253,31 @@ class DataCollector:
             rsi_downtrend,
             ichimoku_qualify,
             not volume_ratio_qualify,
-            candle_comparison_short
+            candle_comparison_short,
+            not swing_high_low_condition,
         ]
 
         print("=======================")
         print(f"vwap_qualify = {vwap_qualify}")
-        print(f"ema_short = {ema_short_qualify}")
-        print(f"ema_medium = {ema_medium_qualify}")
+        print(f"ema_short_qualify = {ema_short_qualify}")
+        #print(f"ema_uptrend = {ema_uptrend}")
         print(f"rsi = {rsi.iloc[-1]}")
         print(f"volume_qualify = {volume_qualify}")
-        print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {bb_upper.iloc[-1]})")
-        print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {bb_lower.iloc[-1]})")
+        print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {self.bollinger_bands()[1].iloc[-1]})")
+        print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {self.bollinger_bands()[2].iloc[-1]})")
         print(f"high_volatility_surge_long = {high_volatility_surge_long}")
         print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
         print(f"ichimoku_qualify = {ichimoku_qualify}")
         print(f"volume_ratio_qualify = {volume_ratio_qualify} (Buy Volume: {self.buy_volume}, Sell Volume: {self.sell_volume})")
         print(f"candle_comparison_long = {candle_comparison_long}")
         print(f"candle_comparison_short = {candle_comparison_short}")
+        print(f"rsi_uptrend = {rsi_uptrend}")
+        print(f"rsi_downtrend = {rsi_downtrend}")
+        print(f"fvg_condition = {fvg_condition}")
+        print(f"swing_high_low_condition = {swing_high_low_condition}")
+        print(f"bos_condition = {bos_condition}")
+        print(f"ob_condition = {ob_condition}")
+        print(f"liquidity_condition = {liquidity_condition}")
         print("=======================")
 
         if all(long_safe):
