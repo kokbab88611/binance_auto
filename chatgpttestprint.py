@@ -242,7 +242,6 @@ class DataCollector:
             print("Conditions not met for either position.")
             return "pass"
 
-
     def close_position(self, current_price):
         if self.position_status:
             close_status = False
@@ -252,20 +251,20 @@ class DataCollector:
                 if current_price >= self.price_profit or current_price <= self.price_stoploss:
                     result = "profit" if current_price >= self.price_profit else "loss"
                     close_status = True 
+                    percent = ((current_price - self.enter_price) / self.enter_price) * self.leverage * 100
             elif self.position == "short":
                 if current_price <= self.price_profit or current_price >= self.price_stoploss:
                     result = "profit" if current_price <= self.price_profit else "loss"
                     close_status = True
+                    percent = ((self.enter_price - current_price) / self.enter_price) * self.leverage * 100
             else:
                 print("Position not defined or invalid position type")
                 return  # Exit if the position type is neither long nor short
 
             if close_status:
-                percent = ((current_price - self.enter_price) / self.enter_price ) * self.leverage * 100
-
                 # Format the log message to include both profit/loss percentage and amount
                 log_message = f"Closed {self.position} position at {current_price} with {result}. " \
-                            f"{result}: ({percent:.2f}%)" 
+                            f"{result}: ({percent:.2f}%)"
                 self.save_result(log_message)
                 print(log_message)
 
