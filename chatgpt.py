@@ -3,11 +3,11 @@ import ta
 import pandas as pd
 import requests
 from threading import Thread
-from binance.cm_futures import CMFutures
 import websocket as wb
 import json
-import os
-import logging
+from datetime import datetime
+import os 
+
 from binance.um_futures import UMFutures
 from binance.error import ClientError
 
@@ -25,12 +25,10 @@ class DataCollector:
         self.position_status = False
         self.position = None
         self.enter_price = None
-        self.quantity = None
-        self.trade = BinanceTrade()
-        self.balance = float(self.trade.balance())
-        self.results_file = "trade_results.txt"
+        self.results_file = "trade_results.log"
         self.price_profit = None
         self.price_stoploss = None
+        self.balance = None
 
     def on_message_vol(self, ws, message):
         data = json.loads(message)
@@ -62,7 +60,7 @@ class DataCollector:
         else:
             self.open_position(Close)
 
-    def on_close(self, ws):
+    def on_close(self, ws, close_status_code, close_msg):
         print("WebSocket closed")
 
     def on_error(self, ws, error):
@@ -78,7 +76,7 @@ class DataCollector:
 
     def get_prev_data(self) -> pd.DataFrame:
         url = 'https://fapi.binance.com/fapi/v1/klines'
-        params = {'symbol': self.symbol, 'interval': self.interval, 'limit': 100}
+        params = {'symbol': self.symbol, 'interval': self.interval, 'limit': 500}
         response = requests.get(url, params=params).json()
         df = pd.DataFrame(response, columns=['openTime', 'Open', 'High', 'Low', 'Close', 'Volume', 'closeTime', 'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore'])
         df = df.drop(df.columns[[6, 7, 8, 9, 10, 11]], axis=1)
@@ -115,118 +113,189 @@ class DataCollector:
         poc = vp.idxmax()
         return vp, poc
 
+    def bollinger_bands(self):
+        bb = ta.volatility.BollingerBands(close=self.main_df['Close'], window=20, window_dev=2)
+        bb_middle = bb.bollinger_mavg()
+        bb_upper = bb.bollinger_hband()
+        bb_lower = bb.bollinger_lband()
+        return bb_middle, bb_upper, bb_lower
+
+    def stochastic_oscillator(self):
+        stoch = ta.momentum.StochasticOscillator(self.main_df['High'], self.main_df['Low'], self.main_df['Close'])
+        stoch_k = stoch.stoch()
+        stoch_d = stoch.stoch_signal()
+        return stoch_k, stoch_d
+
+    def ichimoku(self):
+        ichimoku = ta.trend.IchimokuIndicator(high=self.main_df['High'], low=self.main_df['Low'], window1=9, window2=26, window3=52)
+        ichimoku_base = ichimoku.ichimoku_base_line()
+        ichimoku_conversion = ichimoku.ichimoku_conversion_line()
+        ichimoku_span_a = ichimoku.ichimoku_a()
+        ichimoku_span_b = ichimoku.ichimoku_b()
+        return ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b
+
+    def check_uptrend(self, ema_short, ema_medium, ema_long):
+        # Check if the current and previous values of shorter EMAs are greater than the next longer EMAs
+        uptrend = (ema_short.iloc[-1] > ema_medium.iloc[-1] > ema_long.iloc[-1]) and \
+                (ema_short.iloc[-2] > ema_medium.iloc[-2] > ema_long.iloc[-2])
+
+    def check_rsi_trend(self, rsi):
+        rsi_uptrend = rsi.iloc[-1] > rsi.iloc[-2] and rsi.iloc[-2] > rsi.iloc[-3]
+        rsi_downtrend = rsi.iloc[-1] < rsi.iloc[-2] and rsi.iloc[-2] < rsi.iloc[-3]
+        return rsi_uptrend, rsi_downtrend
+
     def decision(self, current_price):
         ema_short, ema_medium, ema_long = self.EMA()
         rsi = self.RSI()
         vwap = self.VWAP()
         atr = self.ATR().iloc[-1]
         vp, poc = self.volume_profile()
+        bb_middle, bb_upper, bb_lower = self.bollinger_bands()
+        stoch_k, stoch_d = self.stochastic_oscillator()
+        ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b = self.ichimoku()
         volume_threshold = atr * 1.5  # Example threshold, can be adjusted
 
         # Qualifying conditions
         vwap_qualify = current_price > vwap.iloc[-1]
-        ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-2]
-        ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-2]
-        ema_long_qualify = ema_long.iloc[-1] > poc
-        rsi_qualify = rsi.iloc[-1] > 40
+        ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-1]
+        ema_medium_qualify = ema_medium.iloc[-1] > ema_long.iloc[-1]
+        ema_uptrend = self.check_uptrend(ema_short, ema_medium, ema_long)
         volume_qualify = self.buy_volume > volume_threshold
+        bb_upper_qualify = current_price < bb_upper.iloc[-1]
+        bb_lower_qualify = current_price > bb_lower.iloc[-1]
+        stoch_qualify = 20 < stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
 
-        # Volume Profile Condition: Check if current price is near a high-volume node
-        high_volume_node_qualify = vp.get(current_price, 0) > (vp.mean() + vp.std())
+        # Ichimoku Cloud Conditions
+        ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
+                        (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
 
-        print("=======================")
-        print(f"vwap_qualify = {vwap_qualify}")
-        print(f"ema_short = {ema_short_qualify}")
-        print(f"ema_medium = {ema_medium_qualify}")
-        print(f"ema_long = {ema_long_qualify}")
-        print(f"rsi = {rsi_qualify}, {rsi.iloc[-1]}")
-        print(f"volume_qualify = {volume_qualify}")
-        print(f"high_volume_node_qualify = {high_volume_node_qualify}")
-        print(poc)
-        print("=======================")
+        # Less Restrictive Volume Profile Condition
+        high_volume_node_threshold = vp.mean() * 0.9  # Slightly more restrictive than before
 
-        if vwap_qualify and ema_short_qualify and ema_medium_qualify and ema_long_qualify and rsi_qualify and volume_qualify and high_volume_node_qualify:
+        # New Volume Ratio Condition
+        volume_ratio_qualify = self.buy_volume > self.sell_volume
+
+        # New condition for high volatility surges
+        high_volatility_surge_long = current_price > bb_upper.iloc[-1] and current_price > (self.main_df['Close'].iloc[-1] + atr * 1.5)
+        high_volatility_surge_short = current_price < bb_lower.iloc[-1] and current_price < (self.main_df['Close'].iloc[-1] - atr * 1.5)
+
+        # New Candle Comparison Condition
+        previous_close = self.main_df['Close'].iloc[-2]
+        current_close = self.main_df['Close'].iloc[-1]
+        candle_comparison_long = current_close > previous_close
+        candle_comparison_short = current_close < previous_close
+        rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
+
+        # Conditions for Long Position
+        long_safe = [
+            vwap_qualify,
+            ema_short_qualify,
+            ema_medium_qualify,
+            rsi.iloc[-1] > 40,
+            volume_qualify,
+            (bb_upper_qualify or high_volatility_surge_long),
+            bb_lower_qualify,
+            stoch_qualify,
+            ichimoku_qualify,
+            volume_ratio_qualify,
+            rsi_uptrend,
+            candle_comparison_long,
+            ema_uptrend
+        ]
+
+        # Conditions for Short Position
+        short_safe = [
+            not vwap_qualify,
+            not ema_short_qualify,
+            not ema_medium_qualify,
+            rsi.iloc[-1] < 60,
+            self.sell_volume > volume_threshold,
+            bb_upper_qualify,
+            (bb_lower_qualify or high_volatility_surge_short),
+            stoch_qualify,
+            rsi_downtrend,
+            ichimoku_qualify,
+            not volume_ratio_qualify,
+            candle_comparison_short
+        ]
+
+        if all(long_safe):
             print("All conditions met for long position.")
             return "long"
-        elif not vwap_qualify and not ema_short_qualify and not ema_medium_qualify and rsi.iloc[-1] < 60 and self.sell_volume > volume_threshold and high_volume_node_qualify:
+        elif all(short_safe):
             print("All conditions met for short position.")
             return "short"
         else:
-            print("Conditions not met for either position.")
             return "pass"
 
     def close_position(self, current_price):
         if self.position_status:
+            close_status = False
+            result = None
+
             if self.position == "long":
-                side = "SELL"
-                fee_percent = 0.0500  # Assuming taker fee for a long position market order
-                result = "profit" if current_price >= self.price_profit else "loss"
+                if current_price >= self.price_profit or current_price <= self.price_stoploss:
+                    result = "profit" if current_price >= self.price_profit else "loss"
+                    close_status = True 
+                    percent = ((current_price - self.enter_price) / self.enter_price) * self.leverage * 100
             elif self.position == "short":
-                side = "BUY"
-                fee_percent = 0.0500  # Assuming taker fee for a short position market order
-                result = "profit" if current_price <= self.price_profit else "loss"
+                if current_price <= self.price_profit or current_price >= self.price_stoploss:
+                    result = "profit" if current_price <= self.price_profit else "loss"
+                    close_status = True
+                    percent = ((self.enter_price - current_price) / self.enter_price) * self.leverage * 100
             else:
                 print("Position not defined or invalid position type")
                 return  # Exit if the position type is neither long nor short
 
-            # Ensure enter_price and quantity are not zero to avoid division by zero error
-            if self.enter_price == 0 or self.quantity == 0:
-                print(f"Error: enter_price or quantity is zero. enter_price: {self.enter_price}, quantity: {self.quantity}")
-                return
+            if close_status:
+                # Format the log message to include both profit/loss percentage and amount
+                log_message = f"Closed {self.position} position at {current_price} with {result}. " \
+                            f"{result}: ({percent:.2f}%)"
+                self.save_result(log_message)
+                print(log_message)
 
-            effective_fee_percent = fee_percent * self.leverage / 100
-            fee_paid = (self.enter_price * self.quantity * effective_fee_percent) + \
-                    (current_price * self.quantity * effective_fee_percent)
-
-            profit_loss_amount = (current_price - self.enter_price) * self.quantity if self.position == "long" else \
-                                (self.enter_price - current_price) * self.quantity
-
-            if self.enter_price * self.quantity == 0:
-                print("Division by zero error avoided: total cost is zero.")
-                return
-
-            profit_loss_percent = ((profit_loss_amount - fee_paid) / (self.enter_price * self.quantity)) * 100
-
-            self.trade.order(symbol=self.symbol.upper(), side=side, quantity=self.quantity)
-            log_message = f"Closed {self.position} position at {current_price} with {result}. " \
-                        f"Profit/Loss: {profit_loss_amount - fee_paid:.2f} USD ({profit_loss_percent:.2f}%), " \
-                        f"Fee Paid: {fee_paid:.2f} USD"
-            self.save_result(log_message)
-            print(log_message)
-
-            self.position_status = False
-            self.position = None
+                self.position_status = False
+                self.position = None
 
     def save_result(self, message):
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_message = f"{current_time} - {message}"
         with open(self.results_file, "a") as file:
-            file.write(message + "\n")
+            file.write(log_message + "\n")
+
 
     def open_position(self, current_price):
         if not self.position_status:
             status = self.decision(current_price)
             if status != "pass":
-                self.balance = float(self.trade.balance())
-                self.quantity = round(((self.balance * 25) / current_price) * 0.85, 3)
                 if status == "long":
                     self.long(current_price)
                 elif status == "short":
                     self.short(current_price)
 
-    def set_atr_based_sl_tp(self, entry_price, atr):
-        leverage = 25
-        fee_percent = 0.0500
-        min_profit = 0.01
-        
-        effective_fee_per_transaction = (fee_percent * leverage) / 100
-        total_fee = 2 * effective_fee_per_transaction
-        required_return = total_fee + min_profit
-
-        # Calculate initial ATR-based stop-loss and take-profit
-        stop_loss_price = entry_price - (atr * 1.2)
-        atr_based_tp = entry_price + (atr * 1.75)
-
+    def set_atr_based_sl_tp(self, entry_price, atr, position):
+        profit_percentage = 0.000709879 # gain profit from this percentage
+        long_profit_percentage = 1.000709879 
+        short_profit_percentage = 0.999290121
+        long_minimum_tp = entry_price * long_profit_percentage
+        short_minimum_tp = entry_price * short_profit_percentage
+        if atr > 80:
+            atr = 80
+        # Total required return to ensure minimum profit after fees
+        if position == "long":
+            minimum_profit_tp = entry_price * (1 + profit_percentage) 
+            stop_loss_price = entry_price - (atr * 1.3)
+            atr_based_tp = entry_price + (atr * 1.7)
+            if atr_based_tp < long_minimum_tp:
+                minimum_profit_tp = entry_price * 1.001116977
         # Adjust take-profit to ensure at least 1% profit after fees
-        minimum_profit_tp = entry_price * (1 + required_return)
+        if position == "short":
+            minimum_profit_tp = entry_price * (1 - profit_percentage) 
+            stop_loss_price = entry_price + (atr * 1.3)
+            atr_based_tp = entry_price - (atr * 1.7)
+            if atr_based_tp > short_minimum_tp:
+                minimum_profit_tp = entry_price * 0.9988830227
+
         take_profit_price = max(atr_based_tp, minimum_profit_tp)
 
         return take_profit_price, stop_loss_price
@@ -235,10 +304,10 @@ class DataCollector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, "long")
         self.position = "long"
         self.position_status = True
-        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity)
+        
         self.save_result(f"Opened long position at {current_price}")
         print(f"Opened long position at {current_price}")
         print(f"Target Profit Price: {self.price_profit}")
@@ -248,33 +317,47 @@ class DataCollector:
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, "short")
         self.position = "short"
         self.position_status = True
-        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity)
+
         self.save_result(f"Opened short position at {current_price}")
         print(f"Opened short position at {current_price}")
         print(f"Target Profit Price: {self.price_profit}")
         print(f"Stop Loss Price: {self.price_stoploss}")
-
-    def save_result(self, message):
-        with open(self.results_file, "a") as file:
-            file.write(message + "\n")
 
 class BinanceTrade:
     def __init__(self):
         self.api_key = os.getenv('Bin_API_KEY')
         self.api_secret = os.getenv('Bin_SECRET_KEY')
         self.um_futures_client = UMFutures(key=self.api_key, secret=self.api_secret)
+        self.symbol = "btcusdt"
+        self.quantity = 0.001  # Example quantity, adjust as necessary
+        self.leverage = 25
 
-    def balance(self):
+    def fetch_balance(self):
         try:
             response = self.um_futures_client.balance()
             balance = next(x for x in response if x['asset'] == "USDT")['balance']
-            return balance
+            available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
+            print(f"Total Balance: {balance}")
+            print(f"Available Balance: {available_balance}")
+            return balance, available_balance
         except ClientError as e:
             print(f"Error fetching balance: {e}")
-            return None
+            return None, None
+
+    def calculate_quantity(self, available_balance, price):
+        # Calculate the maximum quantity based on available balance and leverage
+        max_quantity = (available_balance * self.leverage) / price
+        return round(max_quantity, 3)  # Adjust the rounding as needed
+
+    def set_leverage(self):
+        try:
+            response = self.um_futures_client.change_leverage(symbol=self.symbol.upper(), leverage=self.leverage)
+            print(f"Leverage set to {response['leverage']}")
+        except ClientError as e:
+            print(f"Error setting leverage: {e}")
 
     def order(self, symbol, side, quantity, order_type="MARKET", price=None, stop_price=None):
         """
@@ -325,44 +408,64 @@ class BinanceTrade:
             return None
 
     def long(self, current_price):
+        self.set_leverage()
+        balance, available_balance = self.fetch_balance()
+        if available_balance is None or float(available_balance) <= 0:
+            print("Insufficient available balance to place order")
+            return
+
+        self.quantity = self.calculate_quantity(float(available_balance), current_price)
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr)
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, "long")
         self.position = "long"
         self.position_status = True
         
         # Market order to open the position
-        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity)
+        self.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity)
         
         # Limit order for take profit
-        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
+        self.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
         
         # Stop market order for stop loss
-        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
+        self.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
         
         self.save_result(f"Opened long position at {current_price}")
         print(f"Opened long position at {current_price}, Target Profit Price: {self.price_profit}, Stop Loss Price: {self.price_stoploss}")
 
     def short(self, current_price):
+        self.set_leverage()
+        balance, available_balance = self.fetch_balance()
+        if available_balance is None or float(available_balance) <= 0:
+            print("Insufficient available balance to place order")
+            return
+
+        self.quantity = self.calculate_quantity(float(available_balance), current_price)
         self.in_atr = self.ATR()
         self.in_atr = round(self.in_atr.iloc[-1], 2)
         self.enter_price = current_price
-        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, is_long=False)
+        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, "short")
         self.position = "short"
         self.position_status = True
         
         # Market order to open the position
-        self.trade.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity)
+        self.order(symbol=self.symbol.upper(), side="SELL", quantity=self.quantity)
         
         # Limit order for take profit
-        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
+        self.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
         
         # Stop market order for stop loss
-        self.trade.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
+        self.order(symbol=self.symbol.upper(), side="BUY", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
         
         self.save_result(f"Opened short position at {current_price}")
         print(f"Opened short position at {current_price}, Target Profit Price: {self.price_profit}, Stop Loss Price: {self.price_stoploss}")
+
+    def save_result(self, message):
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_message = f"{current_time} - {message}"
+        with open("trade_results.log", "a") as file:
+            file.write(log_message + "\n")
 
 if __name__ == "__main__":
     bot = DataCollector()
