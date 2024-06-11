@@ -173,7 +173,7 @@ class DataCollector:
                         (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
 
         # Swing High/Low Condition
-        swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
+        # swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
 
         # New Volume Ratio Condition
         volume_ratio_qualify = self.buy_volume > self.sell_volume
@@ -188,7 +188,6 @@ class DataCollector:
         candle_comparison_long = current_close > previous_close
         candle_comparison_short = current_close < previous_close
 
-        # Conditions for Long Position
         long_safe = [
             rsi.iloc[-1] > 40,
             self.buy_volume > volume_threshold,
@@ -199,10 +198,9 @@ class DataCollector:
             ichimoku_qualify,
             volume_ratio_qualify,
             candle_comparison_long,
-            swing_high_low_condition
+            # swing_high_low_condition
         ]
-    
-        # Conditions for Short Position
+
         short_safe = [
             rsi.iloc[-1] < 60,
             self.sell_volume > volume_threshold,
@@ -213,8 +211,8 @@ class DataCollector:
             ichimoku_qualify,
             not volume_ratio_qualify,
             candle_comparison_short,
-            not swing_high_low_condition,
-        ]
+            # not swing_high_low_condition,
+        ] 
 
         print("=======================")
         print(f"rsi = {rsi.iloc[-1]}")
@@ -229,7 +227,7 @@ class DataCollector:
         print(f"candle_comparison_short = {candle_comparison_short}")
         print(f"rsi_uptrend = {rsi_uptrend}")
         print(f"rsi_downtrend = {rsi_downtrend}")
-        print(f"swing_high_low_condition = {swing_high_low_condition}")
+        # print(f"swing_high_low_condition = {swing_high_low_condition}")
         print("=======================")
 
         if all(long_safe):

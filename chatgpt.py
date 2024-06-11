@@ -14,7 +14,7 @@ import time
 
 class DataCollector:
     def __init__(self):
-        self.leverage = 25
+        self.leverage = 20
         self.symbol = "btcusdt"
         self.interval = "3m"
         self.volstream = "wss://fstream.binance.com/ws/btcusdt@aggTrade"
@@ -268,7 +268,7 @@ class BinanceTrade:
         self.client = UMFutures(key=self.api_key, secret=self.api_secret)
         self.symbol = "BTCUSDT"
         self.quantity = 0.001
-        self.leverage = 25
+        self.leverage = 20
         self.exchange_info = self.client.exchange_info()
         self.symbol_info = self.get_symbol_info(self.symbol.upper())
 
@@ -277,6 +277,34 @@ class BinanceTrade:
             if s['symbol'] == symbol:
                 return s
         return None
+
+    def set_atr_based_sl_tp(self, entry_price, atr, position):
+        profit_percentage = 0.000709879 # gain profit from this percentage
+        long_profit_percentage = 1.000709879 
+        short_profit_percentage = 0.999290121
+        long_minimum_tp = entry_price * long_profit_percentage
+        short_minimum_tp = entry_price * short_profit_percentage
+        if atr > 80:
+            atr = 80
+        # Total required return to ensure minimum profit after fees
+        if position == "long":
+            minimum_profit_tp = entry_price * (1 + profit_percentage) 
+            stop_loss_price = entry_price - (atr * 1.5)
+            atr_based_tp = entry_price + (atr * 1.8)
+            if atr_based_tp < long_minimum_tp:
+                minimum_profit_tp = entry_price * 1.001116977
+        # Adjust take-profit to ensure at least 1% profit after fees
+        if position == "short":
+            minimum_profit_tp = entry_price * (1 - profit_percentage) 
+            stop_loss_price = entry_price + (atr * 1.5)
+            atr_based_tp = entry_price - (atr * 1.8)
+            if atr_based_tp > short_minimum_tp:
+                minimum_profit_tp = entry_price * 0.9988830227
+
+        take_profit_price = max(atr_based_tp, minimum_profit_tp)
+
+        return take_profit_price, stop_loss_price
+
 
     def validate_order(self, price, quantity, order_type):
         if not self.symbol_info:
@@ -317,7 +345,7 @@ class BinanceTrade:
         try:
             response = self.client.balance()
             balance = next(x for x in response if x['asset'] == "USDT")['balance']
-            available_balance = next(x for x in response if x['asset'] == "USDT")['withdrawAvailable']
+            available_balance = next(x for x in response if x['asset'] == "USDT")['balance']
             print(f"Total Balance: {balance}")
             print(f"Available Balance: {available_balance}")
             return float(balance), float(available_balance)
@@ -326,7 +354,7 @@ class BinanceTrade:
             return None, None
 
     def calculate_quantity(self, available_balance, price):
-        max_quantity = (available_balance * self.leverage) / price
+        max_quantity = ((available_balance * self.leverage) - (1 - (self.leverage * 0.005))) / price
         return round(max_quantity, 3)
 
     def set_leverage(self):
