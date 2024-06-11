@@ -289,15 +289,15 @@ class BinanceTrade:
         # Total required return to ensure minimum profit after fees
         if position == "long":
             minimum_profit_tp = entry_price * (1 + profit_percentage) 
-            stop_loss_price = entry_price - (atr * 1.5)
-            atr_based_tp = entry_price + (atr * 1.8)
+            stop_loss_price = entry_price - (atr * 1.3)
+            atr_based_tp = entry_price + (atr * 1.6)
             if atr_based_tp < long_minimum_tp:
                 minimum_profit_tp = entry_price * 1.001116977
         # Adjust take-profit to ensure at least 1% profit after fees
         if position == "short":
             minimum_profit_tp = entry_price * (1 - profit_percentage) 
-            stop_loss_price = entry_price + (atr * 1.5)
-            atr_based_tp = entry_price - (atr * 1.8)
+            stop_loss_price = entry_price + (atr * 1.3)
+            atr_based_tp = entry_price - (atr * 1.6)
             if atr_based_tp > short_minimum_tp:
                 minimum_profit_tp = entry_price * 0.9988830227
 
@@ -315,20 +315,20 @@ class BinanceTrade:
             min_price = float(price_filter['minPrice'])
             max_price = float(price_filter['maxPrice'])
             tick_size = float(price_filter['tickSize'])
-            if not (min_price <= price <= max_price):
-                raise ValueError(f"Price must be between {min_price} and {max_price}.")
-            if (price - min_price) % tick_size != 0:
-                raise ValueError(f"Price must be a multiple of {tick_size}.")
+            # if not (min_price <= price <= max_price):
+            #     raise ValueError(f"Price must be between {min_price} and {max_price}.")
+            # if (price - min_price) % tick_size != 0:
+            #     raise ValueError(f"Price must be a multiple of {tick_size}.")
 
         lot_size = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'LOT_SIZE')
         if lot_size:
             min_qty = float(lot_size['minQty'])
             max_qty = float(lot_size['maxQty'])
             step_size = float(lot_size['stepSize'])
-            if not (min_qty <= quantity <= max_qty):
-                raise ValueError(f"Quantity must be between {min_qty} and {max_qty}.")
-            if (quantity - min_qty) % step_size != 0:
-                raise ValueError(f"Quantity must be a multiple of {step_size}.")
+            # if not (min_qty <= quantity <= max_qty):
+            #     raise ValueError(f"Quantity must be between {min_qty} and {max_qty}.")
+            # if (quantity - min_qty) % step_size != 0:
+            #     raise ValueError(f"Quantity must be a multiple of {step_size}.")
 
         if order_type == "MARKET":
             market_lot_size = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'MARKET_LOT_SIZE')
@@ -336,10 +336,10 @@ class BinanceTrade:
                 min_qty = float(market_lot_size['minQty'])
                 max_qty = float(market_lot_size['maxQty'])
                 step_size = float(market_lot_size['stepSize'])
-                if not (min_qty <= quantity <= max_qty):
-                    raise ValueError(f"Market order quantity must be between {min_qty} and {max_qty}.")
-                if (quantity - min_qty) % step_size != 0:
-                    raise ValueError(f"Market order quantity must be a multiple of {step_size}.")
+                # if not (min_qty <= quantity <= max_qty):
+                #     raise ValueError(f"Market order quantity must be between {min_qty} and {max_qty}.")
+                # if (quantity - min_qty) % step_size != 0:
+                #     raise ValueError(f"Market order quantity must be a multiple of {step_size}.")
 
     def fetch_balance(self):
         try:

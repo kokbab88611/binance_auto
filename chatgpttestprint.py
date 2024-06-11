@@ -11,7 +11,7 @@ from smartmoneyconcepts import smc
 
 class DataCollector:
     def __init__(self):
-        self.leverage = 25
+        self.leverage = 20
         self.symbol = "btcusdt"
         self.interval = "3m"
         self.volstream = "wss://fstream.binance.com/ws/btcusdt@aggTrade"
@@ -273,7 +273,6 @@ class DataCollector:
         log_message = f"{current_time} - {message}"
         with open(self.results_file, "a") as file:
             file.write(log_message + "\n")
-
 
     def open_position(self, current_price):
         if not self.position_status:
