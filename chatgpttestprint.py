@@ -204,7 +204,7 @@ class DataCollector:
                         (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
 
         # SMC Conditions
-        print(self.smc_df['swing_highs_lows'].iloc[-1])
+        # print(self.smc_df['swing_highs_lows'].iloc[-1])
         fvg_condition = self.smc_df['fvg'].iloc[-1] == 1
         swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
         bos_condition = self.smc_df['bos'].iloc[-1] == 1
@@ -226,8 +226,8 @@ class DataCollector:
 
         # Conditions for Long Position
         long_safe = [
-            vwap_qualify,
-            ema_short_qualify,
+            #vwap_qualify,
+            #ema_short_qualify,
             rsi.iloc[-1] > 40,
             volume_qualify,
             (bb_upper_qualify or high_volatility_surge_long),
@@ -240,11 +240,11 @@ class DataCollector:
             #ema_uptrend,
             swing_high_low_condition
         ]
-
+    
         # Conditions for Short Position
         short_safe = [
-            not vwap_qualify,
-            not ema_short_qualify,
+            #not vwap_qualify,
+            #not ema_short_qualify,
             rsi.iloc[-1] < 60,
             self.sell_volume > volume_threshold,
             bb_upper_qualify,
@@ -257,28 +257,28 @@ class DataCollector:
             not swing_high_low_condition,
         ]
 
-        print("=======================")
-        print(f"vwap_qualify = {vwap_qualify}")
-        print(f"ema_short_qualify = {ema_short_qualify}")
-        #print(f"ema_uptrend = {ema_uptrend}")
-        print(f"rsi = {rsi.iloc[-1]}")
-        print(f"volume_qualify = {volume_qualify}")
-        print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {self.bollinger_bands()[1].iloc[-1]})")
-        print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {self.bollinger_bands()[2].iloc[-1]})")
-        print(f"high_volatility_surge_long = {high_volatility_surge_long}")
-        print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
-        print(f"ichimoku_qualify = {ichimoku_qualify}")
-        print(f"volume_ratio_qualify = {volume_ratio_qualify} (Buy Volume: {self.buy_volume}, Sell Volume: {self.sell_volume})")
-        print(f"candle_comparison_long = {candle_comparison_long}")
-        print(f"candle_comparison_short = {candle_comparison_short}")
-        print(f"rsi_uptrend = {rsi_uptrend}")
-        print(f"rsi_downtrend = {rsi_downtrend}")
-        print(f"fvg_condition = {fvg_condition}")
-        print(f"swing_high_low_condition = {swing_high_low_condition}")
-        print(f"bos_condition = {bos_condition}")
-        print(f"ob_condition = {ob_condition}")
-        print(f"liquidity_condition = {liquidity_condition}")
-        print("=======================")
+        # print("=======================")
+        # print(f"vwap_qualify = {vwap_qualify}")
+        # print(f"ema_short_qualify = {ema_short_qualify}")
+        # #print(f"ema_uptrend = {ema_uptrend}")
+        # print(f"rsi = {rsi.iloc[-1]}")
+        # print(f"volume_qualify = {volume_qualify}")
+        # print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {self.bollinger_bands()[1].iloc[-1]})")
+        # print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {self.bollinger_bands()[2].iloc[-1]})")
+        # print(f"high_volatility_surge_long = {high_volatility_surge_long}")
+        # print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
+        # print(f"ichimoku_qualify = {ichimoku_qualify}")
+        # print(f"volume_ratio_qualify = {volume_ratio_qualify} (Buy Volume: {self.buy_volume}, Sell Volume: {self.sell_volume})")
+        # print(f"candle_comparison_long = {candle_comparison_long}")
+        # print(f"candle_comparison_short = {candle_comparison_short}")
+        # print(f"rsi_uptrend = {rsi_uptrend}")
+        # print(f"rsi_downtrend = {rsi_downtrend}")
+        # print(f"fvg_condition = {fvg_condition}")
+        # print(f"swing_high_low_condition = {swing_high_low_condition}")
+        # print(f"bos_condition = {bos_condition}")
+        # print(f"ob_condition = {ob_condition}")
+        # print(f"liquidity_condition = {liquidity_condition}")
+        # print("=======================")
 
         if all(long_safe):
             print("All conditions met for long position.")
@@ -287,7 +287,6 @@ class DataCollector:
             print("All conditions met for short position.")
             return "short"
         else:
-            print("Conditions not met for either position.")
             return "pass"
 
     def close_position(self, current_price):
