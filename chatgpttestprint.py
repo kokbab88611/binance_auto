@@ -99,37 +99,10 @@ class DataCollector:
         return ema_short, ema_medium, ema_long
 
     def apply_smc_indicators(self):
-        fvg = smc.fvg(self.main_df)
-
         swing_highs_lows = smc.swing_highs_lows(self.main_df)
-
-        bos_choch = smc.bos_choch(self.main_df, swing_highs_lows)
-
-        ob = smc.ob(self.main_df, swing_highs_lows)
-
-        liquidity = smc.liquidity(self.main_df, swing_highs_lows)
-
-        # Ensure the returned data structures match expected lengths
-
-        self.smc_df['fvg'] = fvg['FVG']
-        self.smc_df['fvg_top'] = fvg['Top']
-        self.smc_df['fvg_bottom'] = fvg['Bottom']
-        self.smc_df['fvg_mitigated'] = fvg['MitigatedIndex']
         self.smc_df['swing_highs_lows'] = swing_highs_lows['HighLow']
         self.smc_df['swing_levels'] = swing_highs_lows['Level']
-        self.smc_df['bos'] = bos_choch['BOS']
-        self.smc_df['choch'] = bos_choch['CHOCH']
-        self.smc_df['bos_level'] = bos_choch['Level']
-        self.smc_df['bos_broken_index'] = bos_choch['BrokenIndex']
-        self.smc_df['ob'] = ob['OB']
-        self.smc_df['ob_top'] = ob['Top']
-        self.smc_df['ob_bottom'] = ob['Bottom']
-        self.smc_df['ob_volume'] = ob['OBVolume']
-        self.smc_df['ob_percentage'] = ob['Percentage']
-        self.smc_df['liquidity'] = liquidity['Liquidity']
-        self.smc_df['liquidity_level'] = liquidity['Level']
-        self.smc_df['liquidity_end'] = liquidity['End']
-        self.smc_df['liquidity_swept'] = liquidity['Swept']
+
 
     def RSI(self):
         return ta.momentum.RSIIndicator(self.main_df['close'], window=14).rsi()
@@ -179,7 +152,6 @@ class DataCollector:
     def decision(self, current_price):
         self.apply_smc_indicators()
 
-        ema_short, ema_medium, ema_long = self.EMA()
         rsi = self.RSI()
         vwap = self.VWAP()
         atr = self.ATR().iloc[-1]
@@ -189,12 +161,9 @@ class DataCollector:
 
         # Qualifying conditions
         vwap_qualify = current_price > vwap.iloc[-1]
-        ema_short_qualify = ema_short.iloc[-1] > ema_medium.iloc[-1]
-        ema_uptrend = self.check_uptrend(ema_short, ema_medium, ema_long)
         rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
 
         rsi_qualify = rsi.iloc[-1] > 40
-        volume_qualify = self.buy_volume > volume_threshold
         bb_upper_qualify = current_price < self.bollinger_bands()[1].iloc[-1]
         bb_lower_qualify = current_price > self.bollinger_bands()[2].iloc[-1]
         stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
@@ -203,13 +172,8 @@ class DataCollector:
         ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
                         (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
 
-        # SMC Conditions
-        # print(self.smc_df['swing_highs_lows'].iloc[-1])
-        fvg_condition = self.smc_df['fvg'].iloc[-1] == 1
+        # Swing High/Low Condition
         swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
-        bos_condition = self.smc_df['bos'].iloc[-1] == 1
-        ob_condition = self.smc_df['ob'].iloc[-1] == 1
-        liquidity_condition = self.smc_df['liquidity'].iloc[-1] == 1
 
         # New Volume Ratio Condition
         volume_ratio_qualify = self.buy_volume > self.sell_volume
@@ -226,25 +190,20 @@ class DataCollector:
 
         # Conditions for Long Position
         long_safe = [
-            #vwap_qualify,
-            #ema_short_qualify,
             rsi.iloc[-1] > 40,
-            volume_qualify,
-            (bb_upper_qualify or high_volatility_surge_long),
+            self.buy_volume > volume_threshold,
             bb_lower_qualify,
+            (bb_upper_qualify or high_volatility_surge_long),
             stoch_qualify,
+            rsi_uptrend,
             ichimoku_qualify,
             volume_ratio_qualify,
-            rsi_uptrend,
             candle_comparison_long,
-            #ema_uptrend,
             swing_high_low_condition
         ]
     
         # Conditions for Short Position
         short_safe = [
-            #not vwap_qualify,
-            #not ema_short_qualify,
             rsi.iloc[-1] < 60,
             self.sell_volume > volume_threshold,
             bb_upper_qualify,
@@ -257,28 +216,21 @@ class DataCollector:
             not swing_high_low_condition,
         ]
 
-        # print("=======================")
-        # print(f"vwap_qualify = {vwap_qualify}")
-        # print(f"ema_short_qualify = {ema_short_qualify}")
-        # #print(f"ema_uptrend = {ema_uptrend}")
-        # print(f"rsi = {rsi.iloc[-1]}")
-        # print(f"volume_qualify = {volume_qualify}")
-        # print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {self.bollinger_bands()[1].iloc[-1]})")
-        # print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {self.bollinger_bands()[2].iloc[-1]})")
-        # print(f"high_volatility_surge_long = {high_volatility_surge_long}")
-        # print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
-        # print(f"ichimoku_qualify = {ichimoku_qualify}")
-        # print(f"volume_ratio_qualify = {volume_ratio_qualify} (Buy Volume: {self.buy_volume}, Sell Volume: {self.sell_volume})")
-        # print(f"candle_comparison_long = {candle_comparison_long}")
-        # print(f"candle_comparison_short = {candle_comparison_short}")
-        # print(f"rsi_uptrend = {rsi_uptrend}")
-        # print(f"rsi_downtrend = {rsi_downtrend}")
-        # print(f"fvg_condition = {fvg_condition}")
-        # print(f"swing_high_low_condition = {swing_high_low_condition}")
-        # print(f"bos_condition = {bos_condition}")
-        # print(f"ob_condition = {ob_condition}")
-        # print(f"liquidity_condition = {liquidity_condition}")
-        # print("=======================")
+        print("=======================")
+        print(f"rsi = {rsi.iloc[-1]}")
+        print(f"volume_qualify = {self.buy_volume > volume_threshold}")
+        print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {self.bollinger_bands()[1].iloc[-1]})")
+        print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {self.bollinger_bands()[2].iloc[-1]})")
+        print(f"high_volatility_surge_long = {high_volatility_surge_long}")
+        print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
+        print(f"ichimoku_qualify = {ichimoku_qualify}")
+        print(f"volume_ratio_qualify = {volume_ratio_qualify} (Buy Volume: {self.buy_volume}, Sell Volume: {self.sell_volume})")
+        print(f"candle_comparison_long = {candle_comparison_long}")
+        print(f"candle_comparison_short = {candle_comparison_short}")
+        print(f"rsi_uptrend = {rsi_uptrend}")
+        print(f"rsi_downtrend = {rsi_downtrend}")
+        print(f"swing_high_low_condition = {swing_high_low_condition}")
+        print("=======================")
 
         if all(long_safe):
             print("All conditions met for long position.")
@@ -288,7 +240,7 @@ class DataCollector:
             return "short"
         else:
             return "pass"
-
+            
     def close_position(self, current_price):
         if self.position_status:
             close_status = False
@@ -345,15 +297,15 @@ class DataCollector:
         # Total required return to ensure minimum profit after fees
         if position == "long":
             minimum_profit_tp = entry_price * (1 + profit_percentage) 
-            stop_loss_price = entry_price - (atr * 1.3)
-            atr_based_tp = entry_price + (atr * 1.7)
+            stop_loss_price = entry_price - (atr * 1.5)
+            atr_based_tp = entry_price + (atr * 1.8)
             if atr_based_tp < long_minimum_tp:
                 minimum_profit_tp = entry_price * 1.001116977
         # Adjust take-profit to ensure at least 1% profit after fees
         if position == "short":
             minimum_profit_tp = entry_price * (1 - profit_percentage) 
-            stop_loss_price = entry_price + (atr * 1.3)
-            atr_based_tp = entry_price - (atr * 1.7)
+            stop_loss_price = entry_price + (atr * 1.5)
+            atr_based_tp = entry_price - (atr * 1.8)
             if atr_based_tp > short_minimum_tp:
                 minimum_profit_tp = entry_price * 0.9988830227
 
