@@ -9,7 +9,6 @@ from datetime import datetime
 import os 
 from smartmoneyconcepts import smc
 from binance.um_futures import UMFutures
-from binance.cm_futures import CMFutures
 from binance.error import ClientError
 import time
 
@@ -32,6 +31,7 @@ class DataCollector:
         self.price_stoploss = None
         self.balance = None
         self.smc_df = pd.DataFrame(index=self.main_df.index)
+        self.trade = BinanceTrade()
 
     def on_message_vol(self, ws, message):
         data = json.loads(message)
@@ -104,20 +104,12 @@ class DataCollector:
 
     def apply_smc_indicators(self):
         fvg = smc.fvg(self.main_df)
-
         swing_highs_lows = smc.swing_highs_lows(self.main_df)
-
         bos_choch = smc.bos_choch(self.main_df, swing_highs_lows)
-
         ob = smc.ob(self.main_df, swing_highs_lows)
-
         liquidity = smc.liquidity(self.main_df, swing_highs_lows)
-
-        # Ensure the returned data structures match expected lengths
-
         self.smc_df['swing_highs_lows'] = swing_highs_lows['HighLow']
         self.smc_df['swing_levels'] = swing_highs_lows['Level']
-
 
     def RSI(self):
         return ta.momentum.RSIIndicator(self.main_df['close'], window=14).rsi()
@@ -155,9 +147,8 @@ class DataCollector:
         return ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b
 
     def check_uptrend(self, ema_short, ema_medium, ema_long):
-        # Check if the current and previous values of shorter EMAs are greater than the next longer EMAs
-        uptrend = (ema_short.iloc[-1] > ema_medium.iloc[-1] > ema_long.iloc[-1]) and \
-                (ema_short.iloc[-2] > ema_medium.iloc[-2] > ema_long.iloc[-2])
+        uptrend = (ema_short.iloc[-1] > ema_medium.iloc[-1] > ema_long.iloc[-1]) and (ema_short.iloc[-2] > ema_medium.iloc[-2] > ema_long.iloc[-2])
+        return uptrend
 
     def check_rsi_trend(self, rsi):
         rsi_uptrend = rsi.iloc[-1] > rsi.iloc[-2] and rsi.iloc[-2] > rsi.iloc[-3]
@@ -166,44 +157,32 @@ class DataCollector:
 
     def decision(self, current_price):
         self.apply_smc_indicators()
-
         rsi = self.RSI()
         vwap = self.VWAP()
         atr = self.ATR().iloc[-1]
         stoch_k, stoch_d = self.stochastic_oscillator()
         ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b = self.ichimoku()
-        volume_threshold = atr * 1.2  # Example threshold, can be adjusted
+        volume_threshold = atr * 1.2
 
-        # Qualifying conditions
         vwap_qualify = current_price > vwap.iloc[-1]
         rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
-
         rsi_qualify = rsi.iloc[-1] > 40
         bb_upper_qualify = current_price < self.bollinger_bands()[1].iloc[-1]
         bb_lower_qualify = current_price > self.bollinger_bands()[2].iloc[-1]
-        stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
-
-        # Ichimoku Cloud Conditions
+        stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80
         ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
-                        (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
-
-        # Swing High/Low Condition
+                           (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
         swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
-
-        # New Volume Ratio Condition
         volume_ratio_qualify = self.buy_volume > self.sell_volume
 
-        # New condition for high volatility surges
         high_volatility_surge_long = current_price > self.bollinger_bands()[1].iloc[-1] and current_price > (self.main_df['close'].iloc[-1] + atr * 1.5)
         high_volatility_surge_short = current_price < self.bollinger_bands()[2].iloc[-1] and current_price < (self.main_df['close'].iloc[-1] - atr * 1.5)
 
-        # New Candle Comparison Condition
         previous_close = self.main_df['close'].iloc[-2]
         current_close = self.main_df['close'].iloc[-1]
         candle_comparison_long = current_close > previous_close
         candle_comparison_short = current_close < previous_close
 
-        # Conditions for Long Position
         long_safe = [
             rsi.iloc[-1] > 40,
             self.buy_volume > volume_threshold,
@@ -216,8 +195,7 @@ class DataCollector:
             candle_comparison_long,
             swing_high_low_condition
         ]
-    
-        # Conditions for Short Position
+
         short_safe = [
             rsi.iloc[-1] < 60,
             self.sell_volume > volume_threshold,
@@ -257,10 +235,9 @@ class DataCollector:
                     percent = ((self.enter_price - current_price) / self.enter_price) * self.leverage * 100
             else:
                 print("Position not defined or invalid position type")
-                return  # Exit if the position type is neither long nor short
+                return
 
             if close_status:
-                # Format the log message to include both profit/loss percentage and amount
                 log_message = f"Closed {self.position} position at {current_price} with {result}. " \
                             f"{result}: ({percent:.2f}%)"
                 self.save_result(log_message)
@@ -275,77 +252,24 @@ class DataCollector:
         with open(self.results_file, "a") as file:
             file.write(log_message + "\n")
 
-
     def open_position(self, current_price):
         if not self.position_status:
             status = self.decision(current_price)
             if status != "pass":
                 if status == "long":
-                    self.long(current_price)
+                    self.trade.long(current_price)
                 elif status == "short":
-                    self.short(current_price)
+                    self.trade.short(current_price)
 
-    def set_atr_based_sl_tp(self, entry_price, atr, position):
-        profit_percentage = 0.000709879 # gain profit from this percentage
-        long_profit_percentage = 1.000709879 
-        short_profit_percentage = 0.999290121
-        long_minimum_tp = entry_price * long_profit_percentage
-        short_minimum_tp = entry_price * short_profit_percentage
-        if atr > 80:
-            atr = 80
-        # Total required return to ensure minimum profit after fees
-        if position == "long":
-            minimum_profit_tp = entry_price * (1 + profit_percentage) 
-            stop_loss_price = entry_price - (atr * 1.5)
-            atr_based_tp = entry_price + (atr * 1.8)
-            if atr_based_tp < long_minimum_tp:
-                minimum_profit_tp = entry_price * 1.001116977
-        # Adjust take-profit to ensure at least 1% profit after fees
-        if position == "short":
-            minimum_profit_tp = entry_price * (1 - profit_percentage) 
-            stop_loss_price = entry_price + (atr * 1.5)
-            atr_based_tp = entry_price - (atr * 1.8)
-            if atr_based_tp > short_minimum_tp:
-                minimum_profit_tp = entry_price * 0.9988830227
-
-        take_profit_price = max(atr_based_tp, minimum_profit_tp)
-
-        return take_profit_price, stop_loss_price
-
-    def long(self, current_price):
-        self.in_atr = self.ATR()
-        self.in_atr = round(self.in_atr.iloc[-1], 2)
-        self.enter_price = current_price
-        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, "long")
-        self.position = "long"
-        self.position_status = True
-        
-        self.save_result(f"Opened long position at {current_price}")
-        print(f"Opened long position at {current_price}")
-        print(f"Target Profit Price: {self.price_profit}")
-        print(f"Stop Loss Price: {self.price_stoploss}")
-
-    def short(self, current_price):
-        self.in_atr = self.ATR()
-        self.in_atr = round(self.in_atr.iloc[-1], 2)
-        self.enter_price = current_price
-        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, "short")
-        self.position = "short"
-        self.position_status = True
-
-        self.save_result(f"Opened short position at {current_price}")
-        print(f"Opened short position at {current_price}")
-        print(f"Target Profit Price: {self.price_profit}")
-        print(f"Stop Loss Price: {self.price_stoploss}")
 class BinanceTrade:
     def __init__(self):
         self.api_key = os.getenv('Bin_API_KEY')
         self.api_secret = os.getenv('Bin_SECRET_KEY')
-        self.um_futures_client = UMFutures(key=self.api_key, secret=self.api_secret)
-        self.symbol = "btcusdt"
-        self.quantity = 0.001  # Example quantity, adjust as necessary
+        self.client = UMFutures(key=self.api_key, secret=self.api_secret)
+        self.symbol = "BTCUSDT"
+        self.quantity = 0.001
         self.leverage = 25
-        self.exchange_info = self.client.futures_exchange_info()
+        self.exchange_info = self.client.exchange_info()
         self.symbol_info = self.get_symbol_info(self.symbol.upper())
 
     def get_symbol_info(self, symbol):
@@ -358,7 +282,6 @@ class BinanceTrade:
         if not self.symbol_info:
             raise ValueError("Symbol information not found.")
 
-        # Validate price against PRICE_FILTER
         price_filter = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'PRICE_FILTER')
         if price_filter:
             min_price = float(price_filter['minPrice'])
@@ -369,7 +292,6 @@ class BinanceTrade:
             if (price - min_price) % tick_size != 0:
                 raise ValueError(f"Price must be a multiple of {tick_size}.")
 
-        # Validate quantity against LOT_SIZE
         lot_size = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'LOT_SIZE')
         if lot_size:
             min_qty = float(lot_size['minQty'])
@@ -380,7 +302,6 @@ class BinanceTrade:
             if (quantity - min_qty) % step_size != 0:
                 raise ValueError(f"Quantity must be a multiple of {step_size}.")
 
-        # Validate quantity against MARKET_LOT_SIZE for market orders
         if order_type == "MARKET":
             market_lot_size = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'MARKET_LOT_SIZE')
             if market_lot_size:
@@ -394,7 +315,7 @@ class BinanceTrade:
 
     def fetch_balance(self):
         try:
-            response = self.client.futures_account_balance()
+            response = self.client.balance()
             balance = next(x for x in response if x['asset'] == "USDT")['balance']
             available_balance = next(x for x in response if x['asset'] == "USDT")['withdrawAvailable']
             print(f"Total Balance: {balance}")
@@ -405,30 +326,17 @@ class BinanceTrade:
             return None, None
 
     def calculate_quantity(self, available_balance, price):
-        # Calculate the maximum quantity based on available balance and leverage
         max_quantity = (available_balance * self.leverage) / price
-        return round(max_quantity, 3)  # Adjust the rounding as needed
+        return round(max_quantity, 3)
 
     def set_leverage(self):
         try:
-            response = self.client.futures_change_leverage(symbol=self.symbol.upper(), leverage=self.leverage)
+            response = self.client.change_leverage(symbol=self.symbol.upper(), leverage=self.leverage)
             print(f"Leverage set to {response['leverage']}")
         except ClientError as e:
             print(f"Error setting leverage: {e}")
 
     def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None):
-        """
-        Place an order on Binance Futures.
-
-        :param symbol: str - The symbol to trade, e.g., 'BTCUSDT'
-        :param side: str - 'BUY' or 'SELL'
-        :param position_side: str - 'LONG' or 'SHORT'
-        :param quantity: float - The amount of the asset to trade
-        :param order_type: str - 'LIMIT', 'STOP_MARKET', or 'MARKET'
-        :param price: float - The price at which to execute a LIMIT order
-        :param stop_price: float - The stop price for a STOP_MARKET order
-        :return: dict - Details of the order placed or None if an error occurred
-        """
         try:
             self.validate_order(price if price else 0, quantity, order_type)
 
@@ -450,7 +358,7 @@ class BinanceTrade:
                     "stopPrice": str(stop_price)
                 })
 
-            response = self.client.futures_create_order(**params)
+            response = self.client.new_order(**params)
             print(f"Order placed: {response}")
             return response
         except ClientError as e:
@@ -465,24 +373,17 @@ class BinanceTrade:
             return
 
         self.quantity = self.calculate_quantity(available_balance, current_price)
-        self.in_atr = self.ATR()
-        self.in_atr = round(self.in_atr.iloc[-1], 2)
-        self.enter_price = current_price
-        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, "long")
-        self.position = "long"
-        self.position_status = True
+        in_atr = DataCollector().ATR()
+        in_atr = round(in_atr.iloc[-1], 2)
+        enter_price = current_price
+        price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long")
 
-        # Market order to open the position
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=self.quantity)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="LIMIT", price=price_profit)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="STOP_MARKET", stop_price=price_stoploss)
 
-        # Limit order for take profit
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
-
-        # Stop market order for stop loss
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
-
-        self.save_result(f"Opened long position at {current_price}")
-        print(f"Opened long position at {current_price}, Target Profit Price: {self.price_profit}, Stop Loss Price: {self.price_stoploss}")
+        DataCollector().save_result(f"Opened long position at {current_price}")
+        print(f"Opened long position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
 
     def short(self, current_price):
         self.set_leverage()
@@ -492,30 +393,17 @@ class BinanceTrade:
             return
 
         self.quantity = self.calculate_quantity(available_balance, current_price)
-        self.in_atr = self.ATR()
-        self.in_atr = round(self.in_atr.iloc[-1], 2)
-        self.enter_price = current_price
-        self.price_profit, self.price_stoploss = self.set_atr_based_sl_tp(self.enter_price, self.in_atr, "short")
-        self.position = "short"
-        self.position_status = True
+        in_atr = DataCollector().ATR()
+        in_atr = round(in_atr.iloc[-1], 2)
+        enter_price = current_price
+        price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short")
 
-        # Market order to open the position
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=self.quantity)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="LIMIT", price=price_profit)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="STOP_MARKET", stop_price=price_stoploss)
 
-        # Limit order for take profit
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="LIMIT", price=self.price_profit)
-
-        # Stop market order for stop loss
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="STOP_MARKET", stop_price=self.price_stoploss)
-
-        self.save_result(f"Opened short position at {current_price}")
-        print(f"Opened short position at {current_price}, Target Profit Price: {self.price_profit}, Stop Loss Price: {self.price_stoploss}")
-
-    def save_result(self, message):
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        log_message = f"{current_time} - {message}"
-        with open("trade_results.log", "a") as file:
-            file.write(log_message + "\n")
+        DataCollector().save_result(f"Opened short position at {current_price}")
+        print(f"Opened short position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
 
 if __name__ == "__main__":
     bot = DataCollector()
