@@ -16,7 +16,7 @@ import time
 class DataCollector:
     def __init__(self):
         self.leverage = 25
-        self.symbol = "injusdt"
+        self.symbol = "btcusdt"
         self.interval = "3m"
         self.volstream = "wss://fstream.binance.com/ws/btcusdt@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
