@@ -289,15 +289,15 @@ class BinanceTrade:
         # Total required return to ensure minimum profit after fees
         if position == "long":
             minimum_profit_tp = entry_price * (1 + profit_percentage) 
-            stop_loss_price = entry_price - (atr * 1.3)
-            atr_based_tp = entry_price + (atr * 1.6)
+            stop_loss_price = entry_price - (atr * 1.5)
+            atr_based_tp = entry_price + (atr * 1.8)
             if atr_based_tp < long_minimum_tp:
                 minimum_profit_tp = entry_price * 1.001116977
         # Adjust take-profit to ensure at least 1% profit after fees
         if position == "short":
             minimum_profit_tp = entry_price * (1 - profit_percentage) 
-            stop_loss_price = entry_price + (atr * 1.3)
-            atr_based_tp = entry_price - (atr * 1.6)
+            stop_loss_price = entry_price + (atr * 1.5)
+            atr_based_tp = entry_price - (atr * 1.8)
             if atr_based_tp > short_minimum_tp:
                 minimum_profit_tp = entry_price * 0.9988830227
 
@@ -305,47 +305,11 @@ class BinanceTrade:
 
         return take_profit_price, stop_loss_price
 
-
-    def validate_order(self, price, quantity, order_type):
-        if not self.symbol_info:
-            raise ValueError("Symbol information not found.")
-
-        price_filter = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'PRICE_FILTER')
-        if price_filter:
-            min_price = float(price_filter['minPrice'])
-            max_price = float(price_filter['maxPrice'])
-            tick_size = float(price_filter['tickSize'])
-            # if not (min_price <= price <= max_price):
-            #     raise ValueError(f"Price must be between {min_price} and {max_price}.")
-            # if (price - min_price) % tick_size != 0:
-            #     raise ValueError(f"Price must be a multiple of {tick_size}.")
-
-        lot_size = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'LOT_SIZE')
-        if lot_size:
-            min_qty = float(lot_size['minQty'])
-            max_qty = float(lot_size['maxQty'])
-            step_size = float(lot_size['stepSize'])
-            # if not (min_qty <= quantity <= max_qty):
-            #     raise ValueError(f"Quantity must be between {min_qty} and {max_qty}.")
-            # if (quantity - min_qty) % step_size != 0:
-            #     raise ValueError(f"Quantity must be a multiple of {step_size}.")
-
-        if order_type == "MARKET":
-            market_lot_size = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'MARKET_LOT_SIZE')
-            if market_lot_size:
-                min_qty = float(market_lot_size['minQty'])
-                max_qty = float(market_lot_size['maxQty'])
-                step_size = float(market_lot_size['stepSize'])
-                # if not (min_qty <= quantity <= max_qty):
-                #     raise ValueError(f"Market order quantity must be between {min_qty} and {max_qty}.")
-                # if (quantity - min_qty) % step_size != 0:
-                #     raise ValueError(f"Market order quantity must be a multiple of {step_size}.")
-
     def fetch_balance(self):
         try:
             response = self.client.balance()
             balance = next(x for x in response if x['asset'] == "USDT")['balance']
-            available_balance = next(x for x in response if x['asset'] == "USDT")['balance']
+            available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
             print(f"Total Balance: {balance}")
             print(f"Available Balance: {available_balance}")
             return float(balance), float(available_balance)
@@ -353,8 +317,25 @@ class BinanceTrade:
             print(f"Error fetching balance: {e}")
             return None, None
 
+    def sync_time(self):
+        os.system('w32tm /resync')
+
+    def validate_order(self, price, quantity, order_type):
+        if not self.symbol_info:
+            raise ValueError("Symbol information not found.")
+
+        price_filter = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'PRICE_FILTER')
+        lot_size = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'LOT_SIZE')
+        if price_filter and lot_size:
+            min_price = float(price_filter['minPrice'])
+            max_price = float(price_filter['maxPrice'])
+            tick_size = float(price_filter['tickSize'])
+            min_qty = float(lot_size['minQty'])
+            max_qty = float(lot_size['maxQty'])
+            step_size = float(lot_size['stepSize'])
+
     def calculate_quantity(self, available_balance, price):
-        max_quantity = ((available_balance * self.leverage) - (1 - (self.leverage * 0.005))) / price
+        max_quantity = ((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price
         return round(max_quantity, 3)
 
     def set_leverage(self):
@@ -364,7 +345,12 @@ class BinanceTrade:
         except ClientError as e:
             print(f"Error setting leverage: {e}")
 
-    def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None):
+    # def check_margin_requirements(self, position_notional, bid_order_value, ask_order_value):
+    #     margin_required = self.calculate_margin(position_notional, bid_order_value, ask_order_value)
+    #     _ , available_balance = self.fetch_balance()
+    #     return available_balance >= margin_required
+
+    def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
         try:
             self.validate_order(price if price else 0, quantity, order_type)
 
@@ -376,6 +362,8 @@ class BinanceTrade:
                 "type": order_type,
                 "timestamp": int(time.time() * 1000)
             }
+            if close_position:
+                params.update({"closePosition": True})
             if order_type == "LIMIT":
                 params.update({
                     "price": str(price),
@@ -390,8 +378,14 @@ class BinanceTrade:
             print(f"Order placed: {response}")
             return response
         except ClientError as e:
-            print(f"API error placing order: {e}")
-            return None
+            if e.code == -1021:
+                print("Timestamp error detected. Resyncing time and retrying...")
+                self.sync_time()
+                time.sleep(1)
+                self.order(symbol, side, position_side, quantity, order_type, price, stop_price, close_position)
+            else:
+                print(f"API error placing order: {e}")
+                return None
 
     def long(self, current_price):
         self.set_leverage()
@@ -406,9 +400,17 @@ class BinanceTrade:
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long")
 
+        # position_notional = enter_price * self.quantity
+        # bid_order_value = self.quantity * price_profit
+        # ask_order_value = self.quantity * price_stoploss
+
+        # if not self.check_margin_requirements(position_notional, bid_order_value, ask_order_value):
+        #     print("Insufficient margin to place long order")
+        #     return
+
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=self.quantity)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="LIMIT", price=price_profit)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="STOP_MARKET", stop_price=price_stoploss)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="LIMIT", price=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="STOP_MARKET", stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened long position at {current_price}")
         print(f"Opened long position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
@@ -426,9 +428,17 @@ class BinanceTrade:
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short")
 
+        # position_notional = enter_price * self.quantity
+        # bid_order_value = self.quantity * price_stoploss
+        # ask_order_value = self.quantity * price_profit
+
+        # if not self.check_margin_requirements(position_notional, bid_order_value, ask_order_value):
+        #     print("Insufficient margin to place short order")
+        #     return
+
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=self.quantity)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="LIMIT", price=price_profit)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="STOP_MARKET", stop_price=price_stoploss)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="LIMIT", price=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="STOP_MARKET", stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened short position at {current_price}")
         print(f"Opened short position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
