@@ -378,14 +378,10 @@ class BinanceTrade:
             print(f"Order placed: {response}")
             return response
         except ClientError as e:
-            if e.code == -1021:
-                print("Timestamp error detected. Resyncing time and retrying...")
-                self.sync_time()
-                time.sleep(1)
-                self.order(symbol, side, position_side, quantity, order_type, price, stop_price, close_position)
-            else:
-                print(f"API error placing order: {e}")
-                return None
+            print("Timestamp error detected. Resyncing time and retrying...")
+            self.sync_time()
+            time.sleep(1)
+            self.order(symbol, side, position_side, quantity, order_type, price, stop_price, close_position)
 
     def long(self, current_price):
         self.set_leverage()
@@ -394,7 +390,7 @@ class BinanceTrade:
             print("Insufficient available balance to place order")
             return
 
-        self.quantity = self.calculate_quantity(available_balance, current_price)
+        self.quantity = self.calculate_quantity(available_balance, current_price) 
         in_atr = DataCollector().ATR()
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
