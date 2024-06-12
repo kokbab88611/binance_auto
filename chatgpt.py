@@ -290,14 +290,14 @@ class BinanceTrade:
         if position == "long":
             minimum_profit_tp = entry_price * (1 + profit_percentage) 
             stop_loss_price = entry_price - (atr * 1.5)
-            atr_based_tp = entry_price + (atr * 1.8)
+            atr_based_tp = entry_price + (atr * 1.85)
             if atr_based_tp < long_minimum_tp:
                 minimum_profit_tp = entry_price * 1.001116977
         # Adjust take-profit to ensure at least 1% profit after fees
         if position == "short":
             minimum_profit_tp = entry_price * (1 - profit_percentage) 
             stop_loss_price = entry_price + (atr * 1.5)
-            atr_based_tp = entry_price - (atr * 1.8)
+            atr_based_tp = entry_price - (atr * 1.85)
             if atr_based_tp > short_minimum_tp:
                 minimum_profit_tp = entry_price * 0.9988830227
 
@@ -405,8 +405,8 @@ class BinanceTrade:
         #     return
 
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=self.quantity)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="LIMIT", price=price_profit, close_position=True)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="STOP_MARKET", stop_price=price_stoploss, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="TAKE_PROFIT", stopPrice=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened long position at {current_price}")
         print(f"Opened long position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
@@ -433,8 +433,8 @@ class BinanceTrade:
         #     return
 
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=self.quantity)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="LIMIT", price=price_profit, close_position=True)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="STOP_MARKET", stop_price=price_stoploss, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="TAKE_PROFIT", price=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened short position at {current_price}")
         print(f"Opened short position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
