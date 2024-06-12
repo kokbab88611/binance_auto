@@ -157,27 +157,38 @@ class DataCollector:
 
     def decision(self, current_price):
         self.apply_smc_indicators()
+
         rsi = self.RSI()
         vwap = self.VWAP()
         atr = self.ATR().iloc[-1]
         stoch_k, stoch_d = self.stochastic_oscillator()
         ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b = self.ichimoku()
-        volume_threshold = atr * 1.2
+        volume_threshold = atr * 1.2  # Example threshold, can be adjusted
 
+        # Qualifying conditions
         vwap_qualify = current_price > vwap.iloc[-1]
         rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
+
         rsi_qualify = rsi.iloc[-1] > 40
         bb_upper_qualify = current_price < self.bollinger_bands()[1].iloc[-1]
         bb_lower_qualify = current_price > self.bollinger_bands()[2].iloc[-1]
-        stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80
+        stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
+
+        # Ichimoku Cloud Conditions
         ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
-                           (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
-        swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
+                        (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
+
+        # Swing High/Low Condition
+        # swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
+
+        # New Volume Ratio Condition
         volume_ratio_qualify = self.buy_volume > self.sell_volume
 
+        # New condition for high volatility surges
         high_volatility_surge_long = current_price > self.bollinger_bands()[1].iloc[-1] and current_price > (self.main_df['close'].iloc[-1] + atr * 1.5)
         high_volatility_surge_short = current_price < self.bollinger_bands()[2].iloc[-1] and current_price < (self.main_df['close'].iloc[-1] - atr * 1.5)
 
+        # New Candle Comparison Condition
         previous_close = self.main_df['close'].iloc[-2]
         current_close = self.main_df['close'].iloc[-1]
         candle_comparison_long = current_close > previous_close
@@ -193,7 +204,7 @@ class DataCollector:
             ichimoku_qualify,
             volume_ratio_qualify,
             candle_comparison_long,
-            swing_high_low_condition
+            # swing_high_low_condition
         ]
 
         short_safe = [
@@ -206,7 +217,7 @@ class DataCollector:
             ichimoku_qualify,
             not volume_ratio_qualify,
             candle_comparison_short,
-            not swing_high_low_condition,
+            # not swing_high_low_condition,
         ] 
 
         if all(long_safe):
@@ -335,7 +346,7 @@ class BinanceTrade:
             step_size = float(lot_size['stepSize'])
 
     def calculate_quantity(self, available_balance, price):
-        max_quantity = ((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price
+        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.9 ,3)
         return round(max_quantity, 3)
 
     def set_leverage(self):
@@ -351,37 +362,32 @@ class BinanceTrade:
     #     return available_balance >= margin_required
 
     def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
-        try:
-            self.validate_order(price if price else 0, quantity, order_type)
 
-            params = {
-                "symbol": symbol,
-                "side": side,
-                "positionSide": position_side,
-                "quantity": quantity,
-                "type": order_type,
-                "timestamp": int(time.time() * 1000)
-            }
-            if close_position:
-                params.update({"closePosition": True})
-            if order_type == "LIMIT":
-                params.update({
-                    "price": str(price),
-                    "timeInForce": "GTC"
-                })
-            elif order_type in ["STOP_MARKET", "TAKE_PROFIT_MARKET"]:
-                params.update({
-                    "stopPrice": str(stop_price)
-                })
+        self.validate_order(price if price else 0, quantity, order_type)
 
-            response = self.client.new_order(**params)
-            print(f"Order placed: {response}")
-            return response
-        except ClientError as e:
-            print("Timestamp error detected. Resyncing time and retrying...")
-            self.sync_time()
-            time.sleep(1)
-            self.order(symbol, side, position_side, quantity, order_type, price, stop_price, close_position)
+        params = {
+            "symbol": symbol,
+            "side": side,
+            "positionSide": position_side,
+            "quantity": quantity,
+            "type": order_type,
+            "timestamp": int(time.time() * 1000)
+        }
+        if close_position:
+            params.update({"closePosition": True})
+        if order_type == "LIMIT":
+            params.update({
+                "price": str(price),
+                "timeInForce": "GTC"
+            })
+        elif order_type in ["STOP_MARKET", "TAKE_PROFIT_MARKET"]:
+            params.update({
+                "stopPrice": str(stop_price)
+            })
+
+        response = self.client.new_order(**params)
+        print(f"Order placed: {response}")
+        return response
 
     def long(self, current_price):
         self.set_leverage()

@@ -103,7 +103,6 @@ class DataCollector:
         self.smc_df['swing_highs_lows'] = swing_highs_lows['HighLow']
         self.smc_df['swing_levels'] = swing_highs_lows['Level']
 
-
     def RSI(self):
         return ta.momentum.RSIIndicator(self.main_df['close'], window=14).rsi()
 
