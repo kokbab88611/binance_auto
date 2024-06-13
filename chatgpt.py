@@ -278,7 +278,6 @@ class BinanceTrade:
         self.api_secret = os.getenv('Bin_SECRET_KEY')
         self.client = UMFutures(key=self.api_key, secret=self.api_secret)
         self.symbol = "BTCUSDT"
-        self.quantity = 0.001
         self.leverage = 20
         self.exchange_info = self.client.exchange_info()
         self.symbol_info = self.get_symbol_info(self.symbol.upper())
@@ -331,20 +330,6 @@ class BinanceTrade:
     def sync_time(self):
         os.system('w32tm /resync')
 
-    def validate_order(self, price, quantity, order_type):
-        if not self.symbol_info:
-            raise ValueError("Symbol information not found.")
-
-        price_filter = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'PRICE_FILTER')
-        lot_size = next(f for f in self.symbol_info['filters'] if f['filterType'] == 'LOT_SIZE')
-        if price_filter and lot_size:
-            min_price = float(price_filter['minPrice'])
-            max_price = float(price_filter['maxPrice'])
-            tick_size = float(price_filter['tickSize'])
-            min_qty = float(lot_size['minQty'])
-            max_qty = float(lot_size['maxQty'])
-            step_size = float(lot_size['stepSize'])
-
     def calculate_quantity(self, available_balance, price):
         max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.9 ,3)
         return round(max_quantity, 3)
@@ -361,9 +346,7 @@ class BinanceTrade:
     #     _ , available_balance = self.fetch_balance()
     #     return available_balance >= margin_required
 
-    def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
-
-        self.validate_order(price if price else 0, quantity, order_type)
+    def order(self, symbol, side, position_side, quantity, order_type="MARKET", stop_price=None, close_position=False):
 
         params = {
             "symbol": symbol,
@@ -371,19 +354,24 @@ class BinanceTrade:
             "positionSide": position_side,
             "quantity": quantity,
             "type": order_type,
-            "timestamp": int(time.time() * 1000)
+            "timestamp": int(time.time() * 1000),
+            "closePosition": True
         }
-        if close_position:
-            params.update({"closePosition": True})
-        if order_type == "LIMIT":
-            params.update({
-                "price": str(price),
-                "timeInForce": "GTC"
-            })
-        elif order_type in ["STOP_MARKET", "TAKE_PROFIT_MARKET"]:
-            params.update({
+        print('================================================================')
+        print(stop_price)
+        print(quantity)
+        print('================================================================')
+        if order_type != "MARKET":
+            params = {
+                "symbol": symbol,
+                "side": side,
+                "positionSide": position_side,
+                "quantity": quantity,
+                "type": order_type,
+                "timestamp": int(time.time() * 1000),
+                "closePosition": True,
                 "stopPrice": str(stop_price)
-            })
+            }
 
         response = self.client.new_order(**params)
         print(f"Order placed: {response}")
@@ -396,23 +384,15 @@ class BinanceTrade:
             print("Insufficient available balance to place order")
             return
 
-        self.quantity = self.calculate_quantity(available_balance, current_price) 
+        calced_quantity = self.calculate_quantity(available_balance, current_price) 
         in_atr = DataCollector().ATR()
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long")
 
-        # position_notional = enter_price * self.quantity
-        # bid_order_value = self.quantity * price_profit
-        # ask_order_value = self.quantity * price_stoploss
-
-        # if not self.check_margin_requirements(position_notional, bid_order_value, ask_order_value):
-        #     print("Insufficient margin to place long order")
-        #     return
-
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=self.quantity)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="TAKE_PROFIT", stopPrice=price_profit, close_position=True)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=self.quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", stop_price=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened long position at {current_price}")
         print(f"Opened long position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
@@ -424,7 +404,7 @@ class BinanceTrade:
             print("Insufficient available balance to place order")
             return
 
-        self.quantity = self.calculate_quantity(available_balance, current_price)
+        calced_quantity = self.calculate_quantity(available_balance, current_price)
         in_atr = DataCollector().ATR()
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
@@ -438,9 +418,9 @@ class BinanceTrade:
         #     print("Insufficient margin to place short order")
         #     return
 
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=self.quantity)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="TAKE_PROFIT", price=price_profit, close_position=True)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=self.quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="TAKE_PROFIT", stop_price=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened short position at {current_price}")
         print(f"Opened short position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
