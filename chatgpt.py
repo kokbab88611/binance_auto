@@ -8,8 +8,7 @@ import json
 from datetime import datetime
 import os 
 from smartmoneyconcepts import smc
-from binance.um_futures import UMFutures
-from binance.error import ClientError
+from binance.client import Client
 import time
 
 class DataCollector:
@@ -274,12 +273,12 @@ class DataCollector:
 
 class BinanceTrade:
     def __init__(self):
-        self.api_key = os.getenv('Bin_API_KEY')
-        self.api_secret = os.getenv('Bin_SECRET_KEY')
-        self.client = UMFutures(key=self.api_key, secret=self.api_secret)
+        api_key = os.getenv('Bin_API_KEY')
+        api_secret = os.getenv('Bin_SECRET_KEY')
+        self.client = Client(api_key, api_secret)
         self.symbol = "BTCUSDT"
         self.leverage = 20
-        self.exchange_info = self.client.exchange_info()
+        self.exchange_info = self.client.get_exchange_info()
         self.symbol_info = self.get_symbol_info(self.symbol.upper())
 
     def get_symbol_info(self, symbol):
@@ -316,16 +315,12 @@ class BinanceTrade:
         return take_profit_price, stop_loss_price
 
     def fetch_balance(self):
-        try:
-            response = self.client.balance()
-            balance = next(x for x in response if x['asset'] == "USDT")['balance']
-            available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
-            print(f"Total Balance: {balance}")
-            print(f"Available Balance: {available_balance}")
-            return float(balance), float(available_balance)
-        except ClientError as e:
-            print(f"Error fetching balance: {e}")
-            return None, None
+        response = self.client.balance()
+        balance = next(x for x in response if x['asset'] == "USDT")['balance']
+        available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
+        print(f"Total Balance: {balance}")
+        print(f"Available Balance: {available_balance}")
+        return float(balance), float(available_balance)
 
     def sync_time(self):
         os.system('w32tm /resync')
@@ -335,11 +330,8 @@ class BinanceTrade:
         return round(max_quantity, 3)
 
     def set_leverage(self):
-        try:
-            response = self.client.change_leverage(symbol=self.symbol.upper(), leverage=self.leverage)
-            print(f"Leverage set to {response['leverage']}")
-        except ClientError as e:
-            print(f"Error setting leverage: {e}")
+        self.client.futures_change_leverage(symbol=self.symbol, leverage=self.leverage)
+        print("Leverage set")
 
     # def check_margin_requirements(self, position_notional, bid_order_value, ask_order_value):
     #     margin_required = self.calculate_margin(position_notional, bid_order_value, ask_order_value)
@@ -356,10 +348,7 @@ class BinanceTrade:
             "type": order_type,
             "timestamp": int(time.time() * 1000),
         }
-        print('================================================================')
-        print(stop_price)
-        print(quantity)
-        print('================================================================')
+
         if order_type != "MARKET":
             params = {
                 "symbol": symbol,
@@ -372,7 +361,7 @@ class BinanceTrade:
                 "stopPrice": str(stop_price)
             }
 
-        response = self.client.new_order(**params)
+        response = self.client.futures_create_order(**params)
         print(f"Order placed: {response}")
         return response
 
@@ -390,6 +379,7 @@ class BinanceTrade:
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long")
 
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
+        time.sleep(1)
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", stop_price=price_profit, close_position=True)
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
 
@@ -409,15 +399,8 @@ class BinanceTrade:
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short")
 
-        # position_notional = enter_price * self.quantity
-        # bid_order_value = self.quantity * price_stoploss
-        # ask_order_value = self.quantity * price_profit
-
-        # if not self.check_margin_requirements(position_notional, bid_order_value, ask_order_value):
-        #     print("Insufficient margin to place short order")
-        #     return
-
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
+        time.sleep(1)
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="TAKE_PROFIT", stop_price=price_profit, close_position=True)
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
 
