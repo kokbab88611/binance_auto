@@ -355,7 +355,6 @@ class BinanceTrade:
             "quantity": quantity,
             "type": order_type,
             "timestamp": int(time.time() * 1000),
-            "closePosition": True
         }
         print('================================================================')
         print(stop_price)
