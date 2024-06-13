@@ -8,7 +8,8 @@ import json
 from datetime import datetime
 import os 
 from smartmoneyconcepts import smc
-from binance.client import Client
+from binance.um_futures import UMFutures
+from binance.error import ClientError
 import time
 
 class DataCollector:
@@ -218,15 +219,15 @@ class DataCollector:
             candle_comparison_short,
             # not swing_high_low_condition,
         ] 
-
-        if all(long_safe):
-            print("All conditions met for long position.")
-            return "long"
-        elif all(short_safe):
-            print("All conditions met for short position.")
-            return "short"
-        else:
-            return "pass"
+        if not self.position_status:
+            if all(long_safe):
+                print("All conditions met for long position.")
+                return "long"
+            elif all(short_safe):
+                print("All conditions met for short position.")
+                return "short"
+            else:
+                return "pass"
 
     def close_position(self, current_price):
         if self.position_status:
@@ -273,12 +274,12 @@ class DataCollector:
 
 class BinanceTrade:
     def __init__(self):
-        api_key = os.getenv('Bin_API_KEY')
-        api_secret = os.getenv('Bin_SECRET_KEY')
-        self.client = Client(api_key, api_secret)
+        self.api_key = os.getenv('Bin_API_KEY')
+        self.api_secret = os.getenv('Bin_SECRET_KEY')
+        self.client = UMFutures(key=self.api_key, secret=self.api_secret)
         self.symbol = "BTCUSDT"
         self.leverage = 20
-        self.exchange_info = self.client.get_exchange_info()
+        self.exchange_info = self.client.exchange_info()
         self.symbol_info = self.get_symbol_info(self.symbol.upper())
 
     def get_symbol_info(self, symbol):
@@ -299,80 +300,92 @@ class BinanceTrade:
         if position == "long":
             minimum_profit_tp = entry_price * (1 + profit_percentage) 
             stop_loss_price = entry_price - (atr * 1.5)
-            atr_based_tp = entry_price + (atr * 1.85)
+            atr_based_tp = entry_price + (atr * 1.8)
             if atr_based_tp < long_minimum_tp:
                 minimum_profit_tp = entry_price * 1.001116977
         # Adjust take-profit to ensure at least 1% profit after fees
         if position == "short":
             minimum_profit_tp = entry_price * (1 - profit_percentage) 
             stop_loss_price = entry_price + (atr * 1.5)
-            atr_based_tp = entry_price - (atr * 1.85)
+            atr_based_tp = entry_price - (atr * 1.8)
             if atr_based_tp > short_minimum_tp:
                 minimum_profit_tp = entry_price * 0.9988830227
 
         take_profit_price = max(atr_based_tp, minimum_profit_tp)
 
-        return take_profit_price, stop_loss_price
+        return str(take_profit_price), str(stop_loss_price)
 
     def fetch_balance(self):
-        response = self.client.balance()
-        balance = next(x for x in response if x['asset'] == "USDT")['balance']
-        available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
-        print(f"Total Balance: {balance}")
-        print(f"Available Balance: {available_balance}")
-        return float(balance), float(available_balance)
+        try:
+            response = self.client.balance()
+            # balance = next(x for x in response if x['asset'] == "USDT")['balance']
+            available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
+            print(f"Available Balance: {available_balance}")
+            return float(available_balance)
+        except ClientError as e:
+            print(f"Error fetching balance: {e}")
+            return None, None
 
     def sync_time(self):
         os.system('w32tm /resync')
 
     def calculate_quantity(self, available_balance, price):
-        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.9 ,3)
-        return round(max_quantity, 3)
+        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.9 ,6)
+        return round(max_quantity)
 
     def set_leverage(self):
-        self.client.futures_change_leverage(symbol=self.symbol, leverage=self.leverage)
-        print("Leverage set")
+        try:
+            response = self.client.change_leverage(symbol=self.symbol.upper(), leverage=self.leverage)
+            print(f"Leverage set to {response['leverage']}")
+        except ClientError as e:
+            print(f"Error setting leverage: {e}")
 
     # def check_margin_requirements(self, position_notional, bid_order_value, ask_order_value):
     #     margin_required = self.calculate_margin(position_notional, bid_order_value, ask_order_value)
     #     _ , available_balance = self.fetch_balance()
     #     return available_balance >= margin_required
 
-    def order(self, symbol, side, position_side, quantity, order_type="MARKET", stop_price=None, close_position=False):
-
-        params = {
-            "symbol": symbol,
-            "side": side,
-            "positionSide": position_side,
-            "quantity": quantity,
-            "type": order_type,
-            "timestamp": int(time.time() * 1000),
-        }
-
-        if order_type != "MARKET":
+    def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
+        try:
             params = {
                 "symbol": symbol,
                 "side": side,
                 "positionSide": position_side,
                 "quantity": quantity,
                 "type": order_type,
-                "timestamp": int(time.time() * 1000),
-                "closePosition": True,
-                "stopPrice": str(stop_price)
+                "timestamp": int(time.time() * 1000)
             }
+            if close_position:
+                params.update({"close_position": True})
+            if order_type in ["STOP", "TAKE_PROFIT"]:
+                if stop_price:
+                    params.update({"stopPrice": stop_price})
+                if price:
+                    params.update({"price": price})
 
-        response = self.client.futures_create_order(**params)
-        print(f"Order placed: {response}")
-        return response
+            print('================================================================')
+            print(f"Placing order with params: {params}")
+            print('================================================================')
+
+            response = self.client.new_order(**params)
+            print(f"Order placed: {response}")
+            return response
+        except ClientError as e:
+            print(f"API error placing order: {e}")
+            if 'timestamp' in str(e):
+                print("Timestamp error detected. Resyncing time and retrying...")
+                time.sleep(5)
+                self.order(symbol, side, position_side, quantity, order_type, price, stop_price, close_position)
+            return None
 
     def long(self, current_price):
         self.set_leverage()
-        balance, available_balance = self.fetch_balance()
+        available_balance = self.fetch_balance()
         if available_balance is None or available_balance <= 0:
             print("Insufficient available balance to place order")
             return
 
-        calced_quantity = self.calculate_quantity(available_balance, current_price) 
+        calced_quantity = self.calculate_quantity(available_balance, current_price)
         in_atr = DataCollector().ATR()
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
@@ -380,15 +393,15 @@ class BinanceTrade:
 
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
         time.sleep(1)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", stop_price=price_profit, close_position=True)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", price=price_profit, stop_price=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", price=price_stoploss, stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened long position at {current_price}")
         print(f"Opened long position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
 
     def short(self, current_price):
         self.set_leverage()
-        balance, available_balance = self.fetch_balance()
+        available_balance = self.fetch_balance()
         if available_balance is None or available_balance <= 0:
             print("Insufficient available balance to place order")
             return
@@ -401,11 +414,13 @@ class BinanceTrade:
 
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
         time.sleep(1)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="TAKE_PROFIT", stop_price=price_profit, close_position=True)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="TAKE_PROFIT", price=price_profit, stop_price=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", price=price_stoploss, stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened short position at {current_price}")
         print(f"Opened short position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
+
+# Ensure DataCollector class and methods remain correctly implemented as before
 
 if __name__ == "__main__":
     bot = DataCollector()
