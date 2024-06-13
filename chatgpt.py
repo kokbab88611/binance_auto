@@ -346,7 +346,7 @@ class BinanceTrade:
     #     _ , available_balance = self.fetch_balance()
     #     return available_balance >= margin_required
 
-    def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
+    def order(self, symbol, side, position_side, quantity, order_type="MARKET", stop_price=None, close_position=False):
 
         params = {
             "symbol": symbol,
@@ -390,16 +390,8 @@ class BinanceTrade:
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long")
 
-        # position_notional = enter_price * self.quantity
-        # bid_order_value = self.quantity * price_profit
-        # ask_order_value = self.quantity * price_stoploss
-
-        # if not self.check_margin_requirements(position_notional, bid_order_value, ask_order_value):
-        #     print("Insufficient margin to place long order")
-        #     return
-
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", stopPrice=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", stop_price=price_profit, close_position=True)
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened long position at {current_price}")
@@ -427,7 +419,7 @@ class BinanceTrade:
         #     return
 
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="TAKE_PROFIT", price=price_profit, close_position=True)
+        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="TAKE_PROFIT", stop_price=price_profit, close_position=True)
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened short position at {current_price}")
