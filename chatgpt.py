@@ -329,8 +329,7 @@ class BinanceTrade:
                 minimum_profit_tp = entry_price * 0.9988830227
 
         take_profit_price = max(atr_based_tp, minimum_profit_tp)
-
-        return str(take_profit_price), str(stop_loss_price)
+        return float(take_profit_price), float(stop_loss_price)
 
     def fetch_balance(self):
         try:
@@ -338,7 +337,7 @@ class BinanceTrade:
             # balance = next(x for x in response if x['asset'] == "USDT")['balance']
             available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
             print(f"Available Balance: {available_balance}")
-            return round(float(available_balance),2)
+            return round(float(available_balance),3)
         except ClientError as e:
             print(f"Error fetching balance: {e}")
             return None
@@ -360,7 +359,8 @@ class BinanceTrade:
     #     return available_balance >= margin_required
 
     def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
-        quantity = round(quantity,6)
+        quantity = round(quantity, 6)
+
         try:
             params = {
                 "symbol": symbol,
@@ -382,9 +382,9 @@ class BinanceTrade:
             print(f"Placing order with params: {params}")
             print('================================================================')
 
-            response = self.client.new_order(**params)
-            print(f"Order placed: {response}")
-            return response
+            # response = self.client.new_order(**params)
+            # print(f"Order placed: {response}")
+            # return response
         except ClientError as e:
             print(f"API error placing order: {e}")
             if 'timestamp' in str(e):
@@ -405,8 +405,9 @@ class BinanceTrade:
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long")
-
+        price_profit, price_stoploss = str(round(price_profit,2)), str(round(price_stoploss,2))
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
+
         time.sleep(1)
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", price=price_profit, stop_price=price_profit, close_position=True)
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", price=price_stoploss, stop_price=price_stoploss, close_position=True)
@@ -426,6 +427,7 @@ class BinanceTrade:
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short")
+        price_profit, price_stoploss = str(round(price_profit,2)), str(round(price_stoploss,2))
 
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
         time.sleep(1)
