@@ -29,7 +29,6 @@ class DataCollector:
         self.results_file = "trade_results.log"
         self.price_profit = None
         self.price_stoploss = None
-        self.balance = None
         self.smc_df = pd.DataFrame(index=self.main_df.index)
         self.trade = BinanceTrade()
 
@@ -57,11 +56,11 @@ class DataCollector:
             self.main_df = self.add_frame(df2)
             self.buy_volume = 0
             self.sell_volume = 0
-
-        if self.position_status:
-            self.close_position(Close)
+        self.trade.close_all_orders()
+        if self.position_status and not self.trade.check_open_orders:
+            self.close_position(Close) #포지션 있음
         else:
-            self.open_position(Close)
+            self.open_position(Close) #포지션 없음
 
     def on_close(self, ws, close_status_code, close_msg):
         print("WebSocket closed")
@@ -222,18 +221,21 @@ class DataCollector:
         if not self.position_status:
             if all(long_safe):
                 print("All conditions met for long position.")
+                self.position_status = True
                 return "long"
             elif all(short_safe):
                 print("All conditions met for short position.")
+                self.position_status = True
                 return "short"
             else:
                 return "pass"
+        else:
+            pass
 
     def close_position(self, current_price):
         if self.position_status:
             close_status = False
             result = None
-
             if self.position == "long":
                 if current_price >= self.price_profit or current_price <= self.price_stoploss:
                     result = "profit" if current_price >= self.price_profit else "loss"
@@ -266,11 +268,12 @@ class DataCollector:
     def open_position(self, current_price):
         if not self.position_status:
             status = self.decision(current_price)
-            if status != "pass":
-                if status == "long":
-                    self.trade.long(current_price)
-                elif status == "short":
-                    self.trade.short(current_price)
+            if status == "long":
+                self.trade.long(current_price)
+            elif status == "short":
+                self.trade.short(current_price)
+            else:
+                pass
 
 class BinanceTrade:
     def __init__(self):
@@ -288,6 +291,20 @@ class BinanceTrade:
                 return s
         return None
 
+    def close_all_orders(self):
+        all_orders = self.client.get_orders(symbol=self.symbol)
+        if len(all_orders) == 1:
+            self.client.cancel_order(symbol=self.symbol, orderId=all_orders[1]['orderId'], origClientOrderId=all_orders[1]['clientOrderId'])
+        else:
+            pass
+
+    def check_open_orders(self):
+        all_orders = self.client.get_open_orders(symbol=self.symbol)
+        if len(all_orders) > 0:
+            return True
+        else:
+            False
+
     def set_atr_based_sl_tp(self, entry_price, atr, position):
         profit_percentage = 0.000709879 # gain profit from this percentage
         long_profit_percentage = 1.000709879 
@@ -300,14 +317,14 @@ class BinanceTrade:
         if position == "long":
             minimum_profit_tp = entry_price * (1 + profit_percentage) 
             stop_loss_price = entry_price - (atr * 1.5)
-            atr_based_tp = entry_price + (atr * 1.8)
+            atr_based_tp = entry_price + (atr * 1.7)
             if atr_based_tp < long_minimum_tp:
                 minimum_profit_tp = entry_price * 1.001116977
         # Adjust take-profit to ensure at least 1% profit after fees
         if position == "short":
             minimum_profit_tp = entry_price * (1 - profit_percentage) 
             stop_loss_price = entry_price + (atr * 1.5)
-            atr_based_tp = entry_price - (atr * 1.8)
+            atr_based_tp = entry_price - (atr * 1.7)
             if atr_based_tp > short_minimum_tp:
                 minimum_profit_tp = entry_price * 0.9988830227
 
@@ -321,17 +338,14 @@ class BinanceTrade:
             # balance = next(x for x in response if x['asset'] == "USDT")['balance']
             available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
             print(f"Available Balance: {available_balance}")
-            return float(available_balance)
+            return round(float(available_balance),2)
         except ClientError as e:
             print(f"Error fetching balance: {e}")
-            return None, None
-
-    def sync_time(self):
-        os.system('w32tm /resync')
+            return None
 
     def calculate_quantity(self, available_balance, price):
-        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.9 ,6)
-        return round(max_quantity)
+        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.9 ,3)
+        return max_quantity
 
     def set_leverage(self):
         try:
@@ -346,6 +360,7 @@ class BinanceTrade:
     #     return available_balance >= margin_required
 
     def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
+        quantity = round(quantity,6)
         try:
             params = {
                 "symbol": symbol,
