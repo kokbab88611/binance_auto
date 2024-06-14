@@ -57,8 +57,8 @@ class DataCollector:
             self.buy_volume = 0
             self.sell_volume = 0
         self.trade.close_all_orders()
-        if self.position_status and not self.trade.check_open_orders:
-            self.close_position(Close) #포지션 있음
+        if self.trade.check_open_orders:
+            pass #포지션 있음
         else:
             self.open_position(Close) #포지션 없음
 
@@ -232,32 +232,32 @@ class DataCollector:
         else:
             pass
 
-    def close_position(self, current_price):
-        if self.position_status:
-            close_status = False
-            result = None
-            if self.position == "long":
-                if current_price >= self.price_profit or current_price <= self.price_stoploss:
-                    result = "profit" if current_price >= self.price_profit else "loss"
-                    close_status = True 
-                    percent = ((current_price - self.enter_price) / self.enter_price) * self.leverage * 100
-            elif self.position == "short":
-                if current_price <= self.price_profit or current_price >= self.price_stoploss:
-                    result = "profit" if current_price <= self.price_profit else "loss"
-                    close_status = True
-                    percent = ((self.enter_price - current_price) / self.enter_price) * self.leverage * 100
-            else:
-                print("Position not defined or invalid position type")
-                return
+    # def close_position(self, current_price):
+    #     if self.position_status:
+    #         close_status = False
+    #         result = None
+    #         if self.position == "long":
+    #             if current_price >= self.price_profit or current_price <= self.price_stoploss:
+    #                 result = "profit" if current_price >= self.price_profit else "loss"
+    #                 close_status = True 
+    #                 percent = ((current_price - self.enter_price) / self.enter_price) * self.leverage * 100
+    #         elif self.position == "short":
+    #             if current_price <= self.price_profit or current_price >= self.price_stoploss:
+    #                 result = "profit" if current_price <= self.price_profit else "loss"
+    #                 close_status = True
+    #                 percent = ((self.enter_price - current_price) / self.enter_price) * self.leverage * 100
+    #         else:
+    #             print("Position not defined or invalid position type")
+    #             return
 
-            if close_status:
-                log_message = f"Closed {self.position} position at {current_price} with {result}. " \
-                            f"{result}: ({percent:.2f}%)"
-                self.save_result(log_message)
-                print(log_message)
+    #         if close_status:
+    #             log_message = f"Closed {self.position} position at {current_price} with {result}. " \
+    #                         f"{result}: ({percent:.2f}%)"
+    #             self.save_result(log_message)
+    #             print(log_message)
 
-                self.position_status = False
-                self.position = None
+    #             self.position_status = False
+    #             self.position = None
 
     def save_result(self, message):
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -266,14 +266,13 @@ class DataCollector:
             file.write(log_message + "\n")
 
     def open_position(self, current_price):
-        if not self.position_status:
-            status = self.decision(current_price)
-            if status == "long":
-                self.trade.long(current_price)
-            elif status == "short":
-                self.trade.short(current_price)
-            else:
-                pass
+        status = self.decision(current_price)
+        if status == "long":
+            self.trade.long(current_price)
+        elif status == "short":
+            self.trade.short(current_price)
+        else:
+            pass
 
 class BinanceTrade:
     def __init__(self):
@@ -285,6 +284,14 @@ class BinanceTrade:
         self.exchange_info = self.client.exchange_info()
         self.symbol_info = self.get_symbol_info(self.symbol.upper())
 
+    # def inf(self):
+    #     exchange_info = self.client.exchange_info()
+    #     symbols_info = exchange_info['symbols']
+    #     for symbol in symbols_info:
+    #         if symbol['symbol'] == 'BTCUSDT':
+    #             tick_size = next(filter for filter in symbol['filters'] if filter['filterType'] == 'PRICE_FILTER')['tickSize']
+    #             print(f"Symbol: {symbol['symbol']}, Tick Size: {tick_size}")
+
     def get_symbol_info(self, symbol):
         for s in self.exchange_info['symbols']:
             if s['symbol'] == symbol:
@@ -294,7 +301,7 @@ class BinanceTrade:
     def close_all_orders(self):
         all_orders = self.client.get_orders(symbol=self.symbol)
         if len(all_orders) == 1:
-            self.client.cancel_order(symbol=self.symbol, orderId=all_orders[1]['orderId'], origClientOrderId=all_orders[1]['clientOrderId'])
+            self.client.cancel_order(symbol=self.symbol, orderId=all_orders[0]['orderId'], origClientOrderId=all_orders[0]['clientOrderId'])
         else:
             pass
 
@@ -360,7 +367,6 @@ class BinanceTrade:
 
     def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
         quantity = round(quantity, 6)
-
         try:
             params = {
                 "symbol": symbol,
@@ -382,9 +388,9 @@ class BinanceTrade:
             print(f"Placing order with params: {params}")
             print('================================================================')
 
-            # response = self.client.new_order(**params)
-            # print(f"Order placed: {response}")
-            # return response
+            response = self.client.new_order(**params)
+            print(f"Order placed: {response}")
+            return response
         except ClientError as e:
             print(f"API error placing order: {e}")
             if 'timestamp' in str(e):
@@ -405,7 +411,7 @@ class BinanceTrade:
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long")
-        price_profit, price_stoploss = str(round(price_profit,2)), str(round(price_stoploss,2))
+        price_profit, price_stoploss = str(round(price_profit,1)), str(round(price_stoploss,1))
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
 
         time.sleep(1)
@@ -427,7 +433,7 @@ class BinanceTrade:
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short")
-        price_profit, price_stoploss = str(round(price_profit,2)), str(round(price_stoploss,2))
+        price_profit, price_stoploss = str(round(price_profit,1)), str(round(price_stoploss,1))
 
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
         time.sleep(1)
