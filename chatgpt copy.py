@@ -104,14 +104,14 @@ class DataCollector:
         ema_long = ta.trend.EMAIndicator(self.main_df['close'], window=50).ema_indicator()
         return ema_short, ema_medium, ema_long
 
-    # def apply_smc_indicators(self):
-    #     fvg = smc.fvg(self.main_df)
-    #     swing_highs_lows = smc.swing_highs_lows(self.main_df)
-    #     bos_choch = smc.bos_choch(self.main_df, swing_highs_lows)
-    #     ob = smc.ob(self.main_df, swing_highs_lows)
-    #     liquidity = smc.liquidity(self.main_df, swing_highs_lows)
-    #     self.smc_df['swing_highs_lows'] = swing_highs_lows['HighLow']
-    #     self.smc_df['swing_levels'] = swing_highs_lows['Level']
+    def apply_smc_indicators(self):
+        fvg = smc.fvg(self.main_df)
+        swing_highs_lows = smc.swing_highs_lows(self.main_df)
+        bos_choch = smc.bos_choch(self.main_df, swing_highs_lows)
+        ob = smc.ob(self.main_df, swing_highs_lows)
+        liquidity = smc.liquidity(self.main_df, swing_highs_lows)
+        self.smc_df['swing_highs_lows'] = swing_highs_lows['HighLow']
+        self.smc_df['swing_levels'] = swing_highs_lows['Level']
 
     def RSI(self):
         return ta.momentum.RSIIndicator(self.main_df['close'], window=14).rsi()
@@ -222,7 +222,7 @@ class DataCollector:
         ] 
         
         if not self.position_status:
-            if all(short_safe):
+            if True:
                 print("All conditions met for long position.")
                 self.position_status = True
                 return "long"
@@ -314,6 +314,7 @@ class BinanceTrade:
             False
 
     def set_atr_based_sl_tp(self, entry_price, atr, position, balance = 0, quantity = 0):
+        
         balance *= self.leverage
         simple_fee_usdt = balance * (0.063 / 100) #hardcode for bnb 
         fee_proifit_val = simple_fee_usdt/quantity
@@ -326,13 +327,15 @@ class BinanceTrade:
         if position == "long":
             stop_loss_price = entry_price - (atr * 1.5)
             atr_based_tp = entry_price + (atr * 1.8)
+            print(atr_based_tp, long_minimum_tp)
             take_profit_price = max(atr_based_tp, long_minimum_tp)
         # Adjust take-profit to ensure at least 1% profit after fees
         elif position == "short":
             stop_loss_price = entry_price + (atr * 1.5)
             atr_based_tp = entry_price - (atr * 1.8)
             take_profit_price = min(atr_based_tp, short_minimum_tp)
-        return str(round(take_profit_price,2)), str(round(stop_loss_price,2))
+        
+        return float(take_profit_price), float(stop_loss_price)
 
     def fetch_balance(self):
         try:
@@ -379,9 +382,9 @@ class BinanceTrade:
             # print(f"Placing order with params: {params}")
             # print('================================================================')
 
-            response = self.client.new_order(**params)
-            print(f"Order placed: {response}")
-            return response
+            # response = self.client.new_order(**params)
+            # print(f"Order placed: {response}")
+            # return response
         except ClientError as e:
             print(f"API error placing order: {e}")
             if 'timestamp' in str(e):
@@ -402,7 +405,7 @@ class BinanceTrade:
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long", balance=available_balance, quantity=calced_quantity)
-        print(price_profit, price_stoploss)
+        price_profit, price_stoploss = str(round(price_profit,2)), str(round(price_stoploss,2))
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
 
         time.sleep(1)
@@ -424,6 +427,7 @@ class BinanceTrade:
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
         price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short", balance=available_balance, quantity= calced_quantity)
+        price_profit, price_stoploss = str(round(price_profit,2)), str(round(price_stoploss,2))
 
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
         time.sleep(1)
