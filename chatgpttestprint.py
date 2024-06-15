@@ -12,9 +12,9 @@ from smartmoneyconcepts import smc
 class DataCollector:
     def __init__(self):
         self.leverage = 20
-        self.symbol = "btcusdt"
-        self.interval = "3m"
-        self.volstream = "wss://fstream.binance.com/ws/btcusdt@aggTrade"
+        self.symbol = "bnbusdt"
+        self.interval = "5m"
+        self.volstream = "wss://fstream.binance.com/ws/{self.symbol}@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.sell_volume = 0
         self.buy_volume = 0
@@ -318,9 +318,6 @@ class DataCollector:
         self.position_status = True
         
         self.save_result(f"Opened long position at {current_price}")
-        print(f"Opened long position at {current_price}")
-        print(f"Target Profit Price: {self.price_profit}")
-        print(f"Stop Loss Price: {self.price_stoploss}")
 
     def short(self, current_price):
         self.in_atr = self.ATR()
