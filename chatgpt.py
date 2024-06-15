@@ -158,7 +158,7 @@ class DataCollector:
         return rsi_uptrend, rsi_downtrend
 
     def decision(self, current_price):
-        self.apply_smc_indicators()
+        # self.apply_smc_indicators()
 
         rsi = self.RSI()
         vwap = self.VWAP()
@@ -222,7 +222,7 @@ class DataCollector:
         ] 
         
         if not self.position_status:
-            if all(short_safe):
+            if all(long_safe):
                 print("All conditions met for long position.")
                 self.position_status = True
                 return "long"
