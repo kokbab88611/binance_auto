@@ -59,10 +59,8 @@ class DataCollector:
         self.trade.close_all_orders()
         trade_active = self.trade.check_open_orders()
         if not trade_active:
-            print("포지션 찾는중")
             self.open_position(Close)
         else:
-            print("포지션 이미 있음")
             pass
 
     def on_close(self, ws, close_status_code, close_msg):
