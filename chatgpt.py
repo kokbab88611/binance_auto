@@ -15,9 +15,9 @@ import time
 class DataCollector:
     def __init__(self):
         self.leverage = 20
-        self.symbol = "btcusdt"
-        self.interval = "3m"
-        self.volstream = "wss://fstream.binance.com/ws/btcusdt@aggTrade"
+        self.symbol = "bnbusdt"
+        self.interval = "5m"
+        self.volstream = f"wss://fstream.binance.com/ws/{self.symbol}@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.sell_volume = 0
         self.buy_volume = 0
@@ -220,7 +220,7 @@ class DataCollector:
             # not swing_high_low_condition,
         ] 
         if not self.position_status:
-            if all(long_safe):
+            if True:
                 print("All conditions met for long position.")
                 self.position_status = True
                 return "long"
@@ -280,7 +280,7 @@ class BinanceTrade:
         self.api_key = os.getenv('Bin_API_KEY')
         self.api_secret = os.getenv('Bin_SECRET_KEY')
         self.client = UMFutures(key=self.api_key, secret=self.api_secret)
-        self.symbol = "BTCUSDT"
+        self.symbol = "bnbusdt"
         self.leverage = 20
         self.exchange_info = self.client.exchange_info()
         self.symbol_info = self.get_symbol_info(self.symbol.upper())
@@ -289,7 +289,7 @@ class BinanceTrade:
     #     exchange_info = self.client.exchange_info()
     #     symbols_info = exchange_info['symbols']
     #     for symbol in symbols_info:
-    #         if symbol['symbol'] == 'BTCUSDT':
+    #         if symbol['symbol'] == 'BNBUSDT':
     #             tick_size = next(filter for filter in symbol['filters'] if filter['filterType'] == 'PRICE_FILTER')['tickSize']
     #             print(f"Symbol: {symbol['symbol']}, Tick Size: {tick_size}")
 
@@ -313,30 +313,28 @@ class BinanceTrade:
         else:
             False
 
-    def set_atr_based_sl_tp(self, entry_price, atr, position):
-        profit_percentage = 0.000709879 # gain profit from this percentage
-        long_profit_percentage = 1.000709879 
-        short_profit_percentage = 0.999290121
-        long_minimum_tp = entry_price * long_profit_percentage
-        short_minimum_tp = entry_price * short_profit_percentage
-        if atr > 80:
-            atr = 80
+    def set_atr_based_sl_tp(self, entry_price, atr, position, balance = 0, quantity = 0):
+        
+        balance *= self.leverage
+        simple_fee_usdt = balance * (0.063 / 100) #hardcode for bnb 
+        fee_proifit_val = simple_fee_usdt/quantity
+        one_percent_calc = entry_price * (0.01/self.leverage)
+        long_minimum_tp = entry_price + fee_proifit_val + one_percent_calc
+        short_minimum_tp = entry_price - fee_proifit_val - one_percent_calc
+        print(long_minimum_tp, short_minimum_tp)
+        if atr > 2:
+            atr = 2
         # Total required return to ensure minimum profit after fees
         if position == "long":
-            minimum_profit_tp = entry_price * (1 + profit_percentage) 
             stop_loss_price = entry_price - (atr * 1.5)
-            atr_based_tp = entry_price + (atr * 1.7)
-            if atr_based_tp < long_minimum_tp:
-                minimum_profit_tp = entry_price * 1.001116977
+            atr_based_tp = entry_price + (atr * 1.8)
+            take_profit_price = max(atr_based_tp, long_minimum_tp)
         # Adjust take-profit to ensure at least 1% profit after fees
-        if position == "short":
-            minimum_profit_tp = entry_price * (1 - profit_percentage) 
+        elif position == "short":
             stop_loss_price = entry_price + (atr * 1.5)
-            atr_based_tp = entry_price - (atr * 1.7)
-            if atr_based_tp > short_minimum_tp:
-                minimum_profit_tp = entry_price * 0.9988830227
-
-        take_profit_price = max(atr_based_tp, minimum_profit_tp)
+            atr_based_tp = entry_price - (atr * 1.8)
+            take_profit_price = min(atr_based_tp, short_minimum_tp)
+        
         return float(take_profit_price), float(stop_loss_price)
 
     def fetch_balance(self):
@@ -361,11 +359,6 @@ class BinanceTrade:
         except ClientError as e:
             print(f"Error setting leverage: {e}")
 
-    # def check_margin_requirements(self, position_notional, bid_order_value, ask_order_value):
-    #     margin_required = self.calculate_margin(position_notional, bid_order_value, ask_order_value)
-    #     _ , available_balance = self.fetch_balance()
-    #     return available_balance >= margin_required
-
     def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
         quantity = round(quantity, 6)
         try:
@@ -385,9 +378,9 @@ class BinanceTrade:
                 if price:
                     params.update({"price": price})
 
-            print('================================================================')
-            print(f"Placing order with params: {params}")
-            print('================================================================')
+            # print('================================================================')
+            # print(f"Placing order with params: {params}")
+            # print('================================================================')
 
             response = self.client.new_order(**params)
             print(f"Order placed: {response}")
@@ -411,7 +404,7 @@ class BinanceTrade:
         in_atr = DataCollector().ATR()
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
-        price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long")
+        price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long", balance=available_balance, quantity=calced_quantity)
         price_profit, price_stoploss = str(round(price_profit,1)), str(round(price_stoploss,1))
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
 
@@ -433,8 +426,9 @@ class BinanceTrade:
         in_atr = DataCollector().ATR()
         in_atr = round(in_atr.iloc[-1], 2)
         enter_price = current_price
-        price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short")
-        price_profit, price_stoploss = str(round(price_profit,1)), str(round(price_stoploss,1))
+        price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short", balance=available_balance, quantity= calced_quantity)
+        price_profit, price_stoploss = str(round(price_profit,1)), str(
+            round(price_stoploss,1))
 
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
         time.sleep(1)
