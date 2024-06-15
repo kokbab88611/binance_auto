@@ -57,10 +57,13 @@ class DataCollector:
             self.buy_volume = 0
             self.sell_volume = 0
         self.trade.close_all_orders()
-        if self.trade.check_open_orders:
-            pass #포지션 있음
+        trade_active = self.trade.check_open_orders()
+        if not trade_active:
+            print("포지션 찾는중")
+            self.open_position(Close)
         else:
-            self.open_position(Close) #포지션 없음
+            print("포지션 이미 있음")
+            pass
 
     def on_close(self, ws, close_status_code, close_msg):
         print("WebSocket closed")
@@ -306,7 +309,7 @@ class BinanceTrade:
             pass
 
     def check_open_orders(self):
-        all_orders = self.client.get_open_orders(symbol=self.symbol)
+        all_orders = self.client.get_orders(symbol=self.symbol)
         if len(all_orders) > 0:
             return True
         else:
