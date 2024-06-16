@@ -219,7 +219,6 @@ class DataCollector:
             candle_comparison_short,
             # not swing_high_low_condition,
         ] 
-        
 
         if all(long_safe):
             print("All conditions met for long position.")
@@ -281,7 +280,7 @@ class BinanceTrade:
         self.symbol = "bnbusdt"
         self.leverage = 10
         self.exchange_info = self.client.exchange_info()
-        self.symbol_info = self.get_symbol_info(self.symbol.upper())
+        # self.symbol_info = self.get_symbol_info(self.symbol.upper())
 
     def get_symbol_info(self, symbol: str):
         symbol = symbol.upper()
@@ -291,8 +290,7 @@ class BinanceTrade:
                 tick_size = s['filters'][0]['tickSize']
                 price_prcision = s['pricePrecision']
                 quantity_prcision = s['quantityPrecision']
-     
-                print(f"Tick Size: {tick_size}, Price Precision: {price_prcision}, Quantity precision: {quantity_prcision}")
+                # print(f"Tick Size: {tick_size}, Price Precision: {price_prcision}, Quantity precision: {quantity_prcision}")
         return None
 
     def close_all_orders(self):
