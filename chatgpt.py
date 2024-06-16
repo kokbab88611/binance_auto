@@ -24,7 +24,6 @@ class DataCollector:
         self.buy_volume = 0
         self.main_df = self.get_prev_data()
         self.is_candle_closed = False
-        self.position_status = False
         self.position = None
         self.enter_price = None
         self.results_file = "trade_results.log"
@@ -221,19 +220,14 @@ class DataCollector:
             # not swing_high_low_condition,
         ] 
         
-        if not self.position_status:
-            if all(short_safe):
-                print("All conditions met for long position.")
-                self.position_status = True
-                return "long"
-            elif all(short_safe):
-                print("All conditions met for short position.")
-                self.position_status = True
-                return "short"
-            else:
-                return "pass"
+        if all(short_safe):
+            print("All conditions met for long position.")
+            return "long"
+        elif all(short_safe):
+            print("All conditions met for short position.")
+            return "short"
         else:
-            pass
+            return "pass"
 
     # def close_position(self, current_price):
     #     if self.position_status:
