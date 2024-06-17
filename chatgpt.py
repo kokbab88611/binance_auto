@@ -17,7 +17,7 @@ class DataCollector:
     def __init__(self):
         self.leverage = 10
         self.symbol = "bnbusdt"
-        self.interval = "15m"
+        self.interval = "30m"
         self.volstream = f"wss://fstream.binance.com/ws/{self.symbol}@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.sell_volume = 0
