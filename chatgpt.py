@@ -32,6 +32,8 @@ class DataCollector:
         self.smc_df = pd.DataFrame(index=self.main_df.index)
         self.trade = BinanceTrade()
         # print(self.trade.get_symbol_info("bnbusdt"))
+        self.previous_active = False
+        self.current_active = False
 
     def on_message_vol(self, ws, message):
         data = json.loads(message)
@@ -59,10 +61,14 @@ class DataCollector:
             self.sell_volume = 0
         self.trade.close_all_orders()
         trade_active = self.trade.check_open_orders()
+        self.previous_active = self.current_active
+        self.current_active = trade_active
         if not trade_active:
             self.open_position(Close)
         else:
             pass
+
+
 
     def on_close(self, ws, close_status_code, close_msg):
         print("WebSocket closed")
