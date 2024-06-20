@@ -8,16 +8,16 @@ import json
 from datetime import datetime
 import math
 import os 
-from smartmoneyconcepts import smc
+# from smartmoneyconcepts import smc
 from binance.um_futures import UMFutures
 from binance.error import ClientError
 import time
 
 class DataCollector:
     def __init__(self):
-        self.leverage = 10
+        self.leverage = 8
         self.symbol = "bnbusdt"
-        self.interval = "3m"
+        self.interval = "1h"
         self.volstream = f"wss://fstream.binance.com/ws/{self.symbol}@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.sell_volume = 0
@@ -67,8 +67,6 @@ class DataCollector:
             self.open_position(Close)
         else:
             pass
-
-
 
     def on_close(self, ws, close_status_code, close_msg):
         print("WebSocket closed")
@@ -225,7 +223,6 @@ class DataCollector:
             candle_comparison_short,
             # not swing_high_low_condition,
         ] 
-
         if all(long_safe):
             print("All conditions met for long position.")
             return "long"
@@ -234,7 +231,6 @@ class DataCollector:
             return "short"
         else:
             return 0
-
 
     # def close_position(self, current_price):
     #     if self.position_status:
@@ -284,7 +280,7 @@ class BinanceTrade:
         self.api_secret = os.getenv('Bin_SECRET_KEY')
         self.client = UMFutures(key=self.api_key, secret=self.api_secret)
         self.symbol = "bnbusdt"
-        self.leverage = 10
+        self.leverage = 8
         self.exchange_info = self.client.exchange_info()
         # self.symbol_info = self.get_symbol_info(self.symbol.upper())
 
@@ -324,13 +320,13 @@ class BinanceTrade:
             atr = 2
         # Total required return to ensure minimum profit after fees
         if position == "long":
-            stop_loss_price = entry_price - (atr * 1.4)
-            atr_based_tp = entry_price + (atr * 1.5)
+            stop_loss_price = entry_price - (atr * 1.2)
+            atr_based_tp = entry_price + (atr * 1.3)
             take_profit_price = max(atr_based_tp, long_minimum_tp)
         # Adjust take-profit to ensure at least 1% profit after fees
         elif position == "short":
-            stop_loss_price = entry_price + (atr * 1.4)
-            atr_based_tp = entry_price - (atr * 1.5)
+            stop_loss_price = entry_price + (atr * 1.2)
+            atr_based_tp = entry_price - (atr * 1.3)
             take_profit_price = min(atr_based_tp, short_minimum_tp)
         return str(round(take_profit_price,2)), str(round(stop_loss_price,2))
 
