@@ -17,7 +17,7 @@ class DataCollector:
     def __init__(self):
         self.leverage = 10
         self.symbol = "bnbusdt"
-        self.interval = "30m"
+        self.interval = "3m"
         self.volstream = f"wss://fstream.binance.com/ws/{self.symbol}@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.sell_volume = 0
@@ -325,12 +325,12 @@ class BinanceTrade:
         # Total required return to ensure minimum profit after fees
         if position == "long":
             stop_loss_price = entry_price - (atr * 1.4)
-            atr_based_tp = entry_price + (atr * 1.6)
+            atr_based_tp = entry_price + (atr * 1.5)
             take_profit_price = max(atr_based_tp, long_minimum_tp)
         # Adjust take-profit to ensure at least 1% profit after fees
         elif position == "short":
             stop_loss_price = entry_price + (atr * 1.4)
-            atr_based_tp = entry_price - (atr * 1.6)
+            atr_based_tp = entry_price - (atr * 1.5)
             take_profit_price = min(atr_based_tp, short_minimum_tp)
         return str(round(take_profit_price,2)), str(round(stop_loss_price,2))
 
@@ -410,7 +410,9 @@ class BinanceTrade:
         self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", price=price_stoploss, stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened long position at {current_price}")
+        print('================================================================')
         print(f"Opened long position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
+        print('================================================================')
 
     def short(self, current_price):
         self.set_leverage()
@@ -431,7 +433,9 @@ class BinanceTrade:
         self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", price=price_stoploss, stop_price=price_stoploss, close_position=True)
 
         DataCollector().save_result(f"Opened short position at {current_price}")
+        print('================================================================')
         print(f"Opened short position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
+        print('================================================================')
 
 # Ensure DataCollector class and methods remain correctly implemented as before
 
