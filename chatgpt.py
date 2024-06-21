@@ -223,7 +223,7 @@ class DataCollector:
             candle_comparison_short,
             # not swing_high_low_condition,
         ] 
-        if True:
+        if all(long_safe):
             print("All conditions met for long position.")
             return "long"
         elif all(short_safe):
@@ -375,9 +375,9 @@ class BinanceTrade:
             # print(f"Placing order with params: {params}")
             # print('================================================================')
 
-            # response = self.client.new_order(**params)
-            # print(f"Order placed: {response}")
-            # return response
+            response = self.client.new_order(**params)
+            print(f"Order placed: {response}")
+            return response
         except ClientError as e:
             print(f"API error placing order: {e}")
             if 'timestamp' in str(e):
