@@ -223,7 +223,7 @@ class DataCollector:
             candle_comparison_short,
             # not swing_high_low_condition,
         ] 
-        if all(long_safe):
+        if True:
             print("All conditions met for long position.")
             return "long"
         elif all(short_safe):
@@ -320,13 +320,13 @@ class BinanceTrade:
             atr = 2
         # Total required return to ensure minimum profit after fees
         if position == "long":
-            stop_loss_price = entry_price - (atr * 1.2)
-            atr_based_tp = entry_price + (atr * 1.3)
+            stop_loss_price = entry_price - (atr * 0.9)
+            atr_based_tp = entry_price + (atr * 1)
             take_profit_price = max(atr_based_tp, long_minimum_tp)
         # Adjust take-profit to ensure at least 1% profit after fees
         elif position == "short":
-            stop_loss_price = entry_price + (atr * 1.2)
-            atr_based_tp = entry_price - (atr * 1.3)
+            stop_loss_price = entry_price + (atr * 0.9)
+            atr_based_tp = entry_price - (atr * 1)
             take_profit_price = min(atr_based_tp, short_minimum_tp)
         return str(round(take_profit_price,2)), str(round(stop_loss_price,2))
 
@@ -375,9 +375,9 @@ class BinanceTrade:
             # print(f"Placing order with params: {params}")
             # print('================================================================')
 
-            response = self.client.new_order(**params)
-            print(f"Order placed: {response}")
-            return response
+            # response = self.client.new_order(**params)
+            # print(f"Order placed: {response}")
+            # return response
         except ClientError as e:
             print(f"API error placing order: {e}")
             if 'timestamp' in str(e):
