@@ -298,6 +298,13 @@ class BinanceTrade:
                 # print(f"Tick Size: {tick_size}, Price Precision: {price_prcision}, Quantity precision: {quantity_prcision}")
         return None
 
+    def check_open_orders(self):
+        all_orders = self.client.get_orders(symbol=self.symbol)
+        if len(all_orders) > 0:
+            return True
+        else:
+            False
+
     def close_all_orders(self):
         # Check if we are in a cooldown period
         if self.in_cooldown:
