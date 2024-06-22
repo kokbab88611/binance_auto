@@ -61,7 +61,7 @@ class DataCollector:
             self.main_df = self.add_frame(df2)
             self.buy_volume = 0
             self.sell_volume = 0
-        self.trade.close_all_orders(self)
+        self.trade.close_all_orders()
         trade_active = self.trade.check_open_orders()
         self.previous_active = self.current_active
         self.current_active = trade_active
