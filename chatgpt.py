@@ -326,9 +326,6 @@ class BinanceTrade:
         self.in_cooldown = False
         print("Cooldown ended resume trading")
 
-    def can_trade(self):
-        return not self.in_cooldown
-
     def set_atr_based_sl_tp(self, entry_price, atr, position, balance = 0, quantity = 0):
         balance *= self.leverage
         simple_fee_usdt = balance * (0.063 / 100) #hardcode for bnb 
@@ -407,7 +404,7 @@ class BinanceTrade:
             return None
 
     def long(self, current_price):
-        if not self.can_trade():
+        if not self.in_cooldown():
             print("Bot is on cooldown.")
             return
         self.set_leverage()
@@ -434,7 +431,7 @@ class BinanceTrade:
         print('================================================================')
 
     def short(self, current_price):
-        if not self.can_trade():
+        if not self.in_cooldown():
             print("Bot is on cooldown.")
             return
         self.set_leverage()
