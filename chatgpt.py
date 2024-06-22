@@ -12,6 +12,7 @@ import os
 from binance.um_futures import UMFutures
 from binance.error import ClientError
 import time
+from threading import Timer
 
 class DataCollector:
     def __init__(self):
@@ -31,6 +32,7 @@ class DataCollector:
         self.price_stoploss = None
         self.smc_df = pd.DataFrame(index=self.main_df.index)
         self.trade = BinanceTrade()
+        self.cooldown = False
         # print(self.trade.get_symbol_info("bnbusdt"))
         self.previous_active = False
         self.current_active = False
@@ -59,7 +61,7 @@ class DataCollector:
             self.main_df = self.add_frame(df2)
             self.buy_volume = 0
             self.sell_volume = 0
-        self.trade.close_all_orders()
+        self.trade.close_all_orders(self)
         trade_active = self.trade.check_open_orders()
         self.previous_active = self.current_active
         self.current_active = trade_active
@@ -283,6 +285,7 @@ class BinanceTrade:
         self.leverage = 8
         self.exchange_info = self.client.exchange_info()
         # self.symbol_info = self.get_symbol_info(self.symbol.upper())
+        self.in_cooldown = False
 
     def get_symbol_info(self, symbol: str):
         symbol = symbol.upper()
@@ -296,18 +299,28 @@ class BinanceTrade:
         return None
 
     def close_all_orders(self):
+        # Check if we are in a cooldown period
+        if self.in_cooldown:
+            print("Cooldown active...")
+            return
+        
         all_orders = self.client.get_orders(symbol=self.symbol)
         if len(all_orders) == 1:
             self.client.cancel_order(symbol=self.symbol, orderId=all_orders[0]['orderId'], origClientOrderId=all_orders[0]['clientOrderId'])
-        else:
-            pass
+            self.start_cooldown()
 
-    def check_open_orders(self):
-        all_orders = self.client.get_orders(symbol=self.symbol)
-        if len(all_orders) > 0:
-            return True
-        else:
-            False
+    def start_cooldown(self):
+        self.in_cooldown = True
+        print("Cooldown started. 30min cooldown.")
+        cooldown_timer = Timer(1800, self.end_cooldown)
+        cooldown_timer.start()
+
+    def end_cooldown(self):
+        self.in_cooldown = False
+        print("Cooldown ended resume trading")
+
+    def can_trade(self):
+        return not self.in_cooldown
 
     def set_atr_based_sl_tp(self, entry_price, atr, position, balance = 0, quantity = 0):
         balance *= self.leverage
@@ -387,6 +400,9 @@ class BinanceTrade:
             return None
 
     def long(self, current_price):
+        if not self.can_trade():
+            print("Bot is on cooldown.")
+            return
         self.set_leverage()
         available_balance = self.fetch_balance()
         if available_balance is None or available_balance <= 0:
@@ -411,12 +427,14 @@ class BinanceTrade:
         print('================================================================')
 
     def short(self, current_price):
+        if not self.can_trade():
+            print("Bot is on cooldown.")
+            return
         self.set_leverage()
         available_balance = self.fetch_balance()
         if available_balance is None or available_balance <= 0:
             print("Insufficient available balance to place order")
             return
-
         calced_quantity = self.calculate_quantity(available_balance, current_price)
         in_atr = DataCollector().ATR()
         in_atr = round(in_atr.iloc[-1], 2)
