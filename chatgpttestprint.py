@@ -11,9 +11,9 @@ from smartmoneyconcepts import smc
 
 class DataCollector:
     def __init__(self):
-        self.leverage = 20
-        self.symbol = "btcusdt"
-        self.interval = "3m"
+        self.leverage = 8
+        self.symbol = "bnbusdt"
+        self.interval = "1h"
         self.volstream = "wss://fstream.binance.com/ws/btcusdt@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.sell_volume = 0
