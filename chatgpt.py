@@ -225,6 +225,20 @@ class DataCollector:
             candle_comparison_short,
             # not swing_high_low_condition,
         ] 
+        # print("=======================")
+        # print(f"rsi = {rsi.iloc[-1]}")
+        # print(f"volume_qualify = {self.buy_volume > volume_threshold}")
+        # print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {self.bollinger_bands()[1].iloc[-1]})")
+        # print(f"bb_lower_qualify = {bb_lower_qualify} ({current_price} > {self.bollinger_bands()[2].iloc[-1]})")
+        # print(f"high_volatility_surge_long = {high_volatility_surge_long}")
+        # print(f"stoch_qualify = {stoch_qualify} ({stoch_k.iloc[-1]})")
+        # print(f"ichimoku_qualify = {ichimoku_qualify}")
+        # print(f"volume_ratio_qualify = {volume_ratio_qualify} (Buy Volume: {self.buy_volume}, Sell Volume: {self.sell_volume})")
+        # print(f"candle_comparison_long = {candle_comparison_long}")
+        # print(f"candle_comparison_short = {candle_comparison_short}")
+        # print(f"rsi_uptrend = {rsi_uptrend}")
+        # print(f"rsi_downtrend = {rsi_downtrend}")
+        # print("=======================")
         if all(long_safe):
             print("All conditions met for long position.")
             return "long"
@@ -308,7 +322,6 @@ class BinanceTrade:
     def close_all_orders(self):
         # Check if we are in a cooldown period
         if self.in_cooldown:
-            print("Cooldown active...")
             return
         
         all_orders = self.client.get_orders(symbol=self.symbol)
@@ -404,8 +417,7 @@ class BinanceTrade:
             return None
 
     def long(self, current_price):
-        if not self.in_cooldown():
-            print("Bot is on cooldown.")
+        if self.in_cooldown:
             return
         self.set_leverage()
         available_balance = self.fetch_balance()
@@ -431,8 +443,7 @@ class BinanceTrade:
         print('================================================================')
 
     def short(self, current_price):
-        if not self.in_cooldown():
-            print("Bot is on cooldown.")
+        if self.in_cooldown:
             return
         self.set_leverage()
         available_balance = self.fetch_balance()
