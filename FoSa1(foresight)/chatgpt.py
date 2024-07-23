@@ -21,16 +21,17 @@ class DataCollector:
         self.interval = "1h"
         self.volstream = f"wss://fstream.binance.com/ws/{self.symbol}@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
+        self.prev_limit = 100
         self.sell_volume = 0
         self.buy_volume = 0
         self.main_df = self.get_prev_data()
+        # self.supertrend_df = pd.DataFrame(columns=['upperband', 'lowerband', 'Supertrend', 'trend'])
         self.is_candle_closed = False
         self.position = None
         self.enter_price = None
         self.results_file = "trade_results.log"
         self.price_profit = None
         self.price_stoploss = None
-        self.smc_df = pd.DataFrame(index=self.main_df.index)
         self.trade = BinanceTrade()
         self.cooldown = False
         # print(self.trade.get_symbol_info("bnbusdt"))
@@ -86,7 +87,7 @@ class DataCollector:
 
     def get_prev_data(self) -> pd.DataFrame:
         url = 'https://fapi.binance.com/fapi/v1/klines'
-        params = {'symbol': self.symbol, 'interval': self.interval, 'limit': 500}
+        params = {'symbol': self.symbol, 'interval': self.interval, 'limit': self.prev_limit}
         response = requests.get(url, params=params).json()
         df = pd.DataFrame(response, columns=['openTime', 'open', 'high', 'low', 'close', 'volume', 'closeTime', 'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore'])
         df = df.drop(df.columns[[6, 7, 8, 9, 10, 11]], axis=1)
@@ -100,8 +101,53 @@ class DataCollector:
     def live_edit(self, df2):
         df2 = list(df2.values())
         self.main_df.iloc[-1] = df2
-        if len(self.main_df) == 55:
-            self.main_df = self.main_df.drop(self.main_df.index[:15]).reset_index(drop=True)
+        if len(self.main_df) == self.prev_limit * 1.5:
+            drop_num = self.prev_limit / 2
+            self.main_df = self.main_df.drop(self.main_df.index[:drop_num]).reset_index(drop=True)
+
+    # def supertrend(self, atr, multiplier=3):
+    #     # Initialize the Average True Range (ATR) from the ta library
+    #     atr = atr.iloc[-len(self.main_df):]  # Ensure ATR length matches main_df length
+
+    #     # Calculate the basic upper and lower bands of the Supertrend indicator
+    #     hl2 = (self.main_df['high'] + self.main_df['low']) / 2
+    #     self.supertrend_df['upperband'] = hl2 - (multiplier * atr)
+    #     self.supertrend_df['lowerband'] = hl2 + (multiplier * atr)
+    #     self.supertrend_df['Supertrend'] = np.nan
+    #     self.supertrend_df['trend'] = np.nan
+
+    #     # Initialize the first row of Supertrend
+    #     first_index = self.supertrend_df.first_valid_index()
+    #     self.supertrend_df.loc[first_index, 'Supertrend'] = self.supertrend_df.loc[first_index, 'upperband'] if self.main_df.loc[first_index, 'close'] > self.supertrend_df.loc[first_index, 'upperband'] else self.supertrend_df.loc[first_index, 'lowerband']
+    #     self.supertrend_df.loc[first_index, 'trend'] = 1 if self.main_df.loc[first_index, 'close'] > self.supertrend_df.loc[first_index, 'upperband'] else -1
+
+    #     # Compute Supertrend
+    #     for i in range(first_index + 1, len(self.main_df)):
+    #         if self.main_df.loc[i, 'close'] > self.supertrend_df.loc[i-1, 'upperband']:
+    #             self.supertrend_df.loc[i, 'Supertrend'] = self.supertrend_df.loc[i, 'upperband']
+    #             self.supertrend_df.loc[i, 'trend'] = 1
+    #         elif self.main_df.loc[i, 'close'] < self.supertrend_df.loc[i-1, 'lowerband']:
+    #             self.supertrend_df.loc[i, 'Supertrend'] = self.supertrend_df.loc[i, 'lowerband']
+    #             self.supertrend_df.loc[i, 'trend'] = -1
+    #         else:
+    #             self.supertrend_df.loc[i, 'Supertrend'] = self.supertrend_df.loc[i-1, 'Supertrend']
+    #             self.supertrend_df.loc[i, 'trend'] = self.supertrend_df.loc[i-1, 'trend']
+                
+    #         self.supertrend_df.loc[i, 'upperband'] = max(self.supertrend_df.loc[i, 'upperband'], self.supertrend_df.loc[i, 'Supertrend']) if self.main_df.loc[i, 'close'] > self.supertrend_df.loc[i-1, 'Supertrend'] else self.supertrend_df.loc[i, 'upperband']
+    #         self.supertrend_df.loc[i, 'lowerband'] = min(self.supertrend_df.loc[i, 'lowerband'], self.supertrend_df.loc[i, 'Supertrend']) if self.main_df.loc[i, 'close'] < self.supertrend_df.loc[i-1, 'Supertrend'] else self.supertrend_df.loc[i, 'lowerband']
+
+    #     self.supertrend_df['buy_signal'] = ((self.supertrend_df['trend'] == 1) & (self.supertrend_df['trend'].shift(1) == -1))
+    #     self.supertrend_df['sell_signal'] = ((self.supertrend_df['trend'] == -1) & (self.supertrend_df['trend'].shift(1) == 1))
+
+    #     last_signal = "None"
+    #     last_index = self.supertrend_df.last_valid_index()
+    #     if self.supertrend_df.loc[last_index, 'buy_signal']:
+    #         last_signal = "Buy"
+    #     elif self.supertrend_df.loc[last_index, 'sell_signal']:
+    #         last_signal = "Sell"
+    #     print(f"Latest Signal: {last_signal}")
+    #     print(f"Current Trend: {self.supertrend_df.loc[last_index, 'trend']}")
+    #     return last_signal, self.supertrend_df.loc[last_index, 'trend']
 
     def EMA(self):
         ema_short = ta.trend.EMAIndicator(self.main_df['close'], window=9).ema_indicator()
@@ -167,13 +213,14 @@ class DataCollector:
 
         rsi = self.RSI()
         vwap = self.VWAP()
-        atr = self.ATR().iloc[-1]
+        atr = self.ATR()
+        atr_last = atr.iloc[-1]
         stoch_k, stoch_d = self.stochastic_oscillator()
-        ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b = self.ichimoku()
-        volume_threshold = atr * 1.2  # Example threshold, can be adjusted
+        # ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b = self.ichimoku()
+        # volume_threshold = atr_last * 1.2  # Example threshold, can be adjusted
 
         # Qualifying conditions
-        vwap_qualify = current_price > vwap.iloc[-1]
+        # vwap_qualify = current_price > vwap.iloc[-1]
         rsi_uptrend, rsi_downtrend = self.check_rsi_trend(rsi)
 
         rsi_qualify = rsi.iloc[-1] > 40
@@ -182,8 +229,8 @@ class DataCollector:
         stoch_qualify = stoch_k.iloc[-1] > 20 and stoch_k.iloc[-1] < 80  # Not in extreme overbought or oversold
 
         # Ichimoku Cloud Conditions
-        ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
-                        (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
+        # ichimoku_qualify = (current_price > ichimoku_span_a.iloc[-1] and current_price > ichimoku_span_b.iloc[-1]) or \
+        #                 (current_price < ichimoku_span_a.iloc[-1] and current_price < ichimoku_span_b.iloc[-1])
 
         # Swing High/Low Condition
         # swing_high_low_condition = self.smc_df['swing_highs_lows'].iloc[-1] == 1
@@ -202,12 +249,12 @@ class DataCollector:
         candle_comparison_short = current_close < previous_close
         long_safe = [
             rsi.iloc[-1] > 40,
-            self.buy_volume > volume_threshold,
+            # self.buy_volume > volume_threshold,
             bb_lower_qualify,
             (bb_upper_qualify or high_volatility_surge_long),
             stoch_qualify,
             rsi_uptrend,
-            ichimoku_qualify,
+            # ichimoku_qualify,
             volume_ratio_qualify,
             candle_comparison_long,
             # swing_high_low_condition
@@ -215,12 +262,12 @@ class DataCollector:
 
         short_safe = [
             rsi.iloc[-1] < 60,
-            self.sell_volume > volume_threshold,
+            # self.sell_volume > volume_threshold,
             bb_upper_qualify,
             (bb_lower_qualify or high_volatility_surge_short),
             stoch_qualify,
             rsi_downtrend,
-            ichimoku_qualify,
+            # ichimoku_qualify,
             not volume_ratio_qualify,
             candle_comparison_short,
             # not swing_high_low_condition,
@@ -405,9 +452,9 @@ class BinanceTrade:
             # print(f"Placing order with params: {params}")
             # print('================================================================')
 
-            response = self.client.new_order(**params)
-            print(f"Order placed: {response}")
-            return response
+            # response = self.client.new_order(**params)
+            # print(f"Order placed: {response}")
+            # return response
         except ClientError as e:
             print(f"API error placing order: {e}")
             if 'timestamp' in str(e):
