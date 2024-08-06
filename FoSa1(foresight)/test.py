@@ -1,56 +1,78 @@
-import numpy as np
-import ta
+import requests
 import pandas as pd
-def supertrend(df, period=10, multiplier=3):
-    # Initialize the Average True Range (ATR) from the ta library
-    atr = ta.volatility.AverageTrueRange(df['high'], df['low'], df['close'], window=period).average_true_range()
+import matplotlib.pyplot as plt
+import numpy as np
 
-    # Calculate the basic upper and lower bands of the Supertrend indicator
-    hl2 = (df['high'] + df['low']) / 2
-    df['upperband'] = hl2 - (multiplier * atr)
-    df['lowerband'] = hl2 + (multiplier * atr)
-    df['Supertrend'] = 0.0
-    df['trend'] = 0
+# Fetch Historical Data
+def get_prev_data() -> pd.DataFrame:
+    url = 'https://fapi.binance.com/fapi/v1/klines'
+    params = {'symbol': 'BTCUSDT', 'interval': '5m', 'limit': 100}
+    response = requests.get(url, params=params).json()
+    columns = ['openTime', 'open', 'high', 'low', 'close', 'volume']
+    df = pd.DataFrame(response, columns=columns + ['closeTime', 'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore'])
+    df['openTime'] = pd.to_datetime(df['openTime'], unit='ms')
+    df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
+    return df[columns]
 
-    # Initial trend conditions
-    if df['close'][0] > df['upperband'][0]:
-        df['Supertrend'][0] = df['upperband'][0]
-        df['trend'][0] = 1
-    else:
-        df['Supertrend'][0] = df['lowerband'][0]
-        df['trend'][0] = 0
+# Identify Resistance Levels and their locations
+def identify_resistance_levels(df, window=20):
+    rolling_max = df['high'].rolling(window=window, min_periods=1).max()
+    resistance_levels = rolling_max[rolling_max.shift(1) < rolling_max]
+    recent_resistances = resistance_levels.dropna().tail(3)  # Get the last 3 resistance levels
+    return recent_resistances
 
-    # Compute Supertrend 
-    for i in range(1, len(df)):
-        if df['close'][i] > df['upperband'][i-1]:
-            df['Supertrend'][i] = df['upperband'][i]
-            df['trend'][i] = 1
-        elif df['close'][i] < df['lowerband'][i-1]:
-            df['Supertrend'][i] = df['lowerband'][i]
-            df['trend'][i] = -1
-        else:
-            df['Supertrend'][i] = df['Supertrend'][i-1] if df['close'][i] > df['Supertrend'][i-1] else df['lowerband'][i]
-            df['trend'][i] = df['trend'][i-1]
+# Identify Support Levels and their locations
+def identify_support_levels(df, window=20):
+    rolling_min = df['low'].rolling(window=window, min_periods=1).min()
+    support_levels = rolling_min[rolling_min.shift(1) > rolling_min]
+    recent_supports = support_levels.dropna().tail(3)  # Get the last 3 support levels
+    return recent_supports
 
-        df['upperband'][i] = max(df['upperband'][i], df['Supertrend'][i]) if df['close'][i] > df['Supertrend'][i-1] else df['upperband'][i]
-        df['lowerband'][i] = min(df['lowerband'][i], df['Supertrend'][i]) if df['close'][i] < df['Supertrend'][i-1] else df['lowerband'][i]
+# Remove anomalies if they are more than 1% away from the current price
+def remove_anomalies(levels, current_price, threshold=0.01):
+    filtered_levels = levels[np.abs((levels - current_price) / current_price) <= threshold]
+    return filtered_levels
 
-    df['buy_signal'] = ((df['trend'] == 1) & (df['trend'].shift(1) == -1))
-    df['sell_signal'] = ((df['trend'] == -1) & (df['trend'].shift(1) == 1))
+# Calculate the average of levels
+def calculate_average_level(levels):
+    return levels.mean()
 
-    last_signal = "None"
-    if df.iloc[-1]['buy_signal']:
-        last_signal = "Buy"
-    elif df.iloc[-1]['sell_signal']:
-        last_signal = "Sell"
+# Plot Support and Resistance Levels, points and averages
+def plot_levels(df, resistance_levels, support_levels, average_resistance, average_support):
+    plt.figure(figsize=(14, 7))
+    plt.plot(df['openTime'], df['close'], label='Close Price', color='blue')
+    
+    for index, level in resistance_levels.items():
+        plt.axhline(y=level, color='red', linestyle='--', label=f'Resistance {level:.2f}')
+        plt.plot(df.loc[index, 'openTime'], level, 'ro')  # Mark the resistance point
 
-    return last_signal, df.iloc[-1]['trend']
+    for index, level in support_levels.items():
+        plt.axhline(y=level, color='green', linestyle='--', label=f'Support {level:.2f}')
+        plt.plot(df.loc[index, 'openTime'], level, 'go')  # Mark the support point
+    
+    plt.axhline(y=average_resistance, color='red', linestyle='-', label=f'Average Resistance {average_resistance:.2f}')
+    plt.axhline(y=average_support, color='green', linestyle='-', label=f'Average Support {average_support:.2f}')
+    
+    plt.title('BTC/USDT Price with Recent 3 Support and Resistance Levels and Averages')
+    plt.xlabel('Time')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.show()
 
-df = pd.DataFrame(data = {
-    'high': [130, 132, 135, 133, 136, 137, 138, 140, 142, 141, 143, 145, 146, 147, 148, 150, 151, 152, 153, 155],
-    'low': [128, 130, 132, 131, 133, 134, 135, 137, 139, 138, 140, 142, 143, 144, 145, 147, 148, 149, 150, 152],
-    'close': [129, 131, 133, 132, 135, 136, 137, 139, 140, 140, 142, 144, 145, 146, 147, 149, 150, 151, 152, 154]
-})
-signal, current_trend = supertrend(df)
-print("Latest Signal:", signal)
-print("Current Trend:", current_trend)
+# Main Execution
+df = get_prev_data()
+current_price = df['close'].iloc[-1]
+
+resistance_levels = identify_resistance_levels(df)
+support_levels = identify_support_levels(df)
+
+# Remove anomalies
+resistance_levels_filtered = remove_anomalies(resistance_levels, current_price)
+support_levels_filtered = remove_anomalies(support_levels, current_price)
+
+# Calculate averages
+average_resistance = calculate_average_level(resistance_levels_filtered)
+average_support = calculate_average_level(support_levels_filtered)
+
+# Plot levels
+plot_levels(df, resistance_levels_filtered, support_levels_filtered, average_resistance, average_support)

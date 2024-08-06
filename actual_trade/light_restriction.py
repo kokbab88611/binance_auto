@@ -155,7 +155,7 @@ class Data_collector:
         sma_fourteen_list = self.SMA(df_close)
         
         two_d, two_k = self.stochRSI()
-        
+        print(two_d, two_k)
         prev_d, curr_d = two_d[0], two_d[1]
         prev_k, curr_k = two_k[0], two_k[1]
         

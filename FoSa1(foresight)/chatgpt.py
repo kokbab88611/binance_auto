@@ -18,7 +18,7 @@ class DataCollector:
     def __init__(self):
         self.leverage = 8
         self.symbol = "bnbusdt"
-        self.interval = "1h"
+        self.interval = "5m"
         self.volstream = f"wss://fstream.binance.com/ws/{self.symbol}@aggTrade"
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.prev_limit = 100
@@ -38,7 +38,7 @@ class DataCollector:
         self.previous_active = False
         self.current_active = False
 
-    def on_message_vol(self, ws, message):
+    def on_message_vol(self, ws, message): 
         data = json.loads(message)
         market_maker = data['m']
         quantity = float(data['q'])
@@ -67,9 +67,11 @@ class DataCollector:
         self.previous_active = self.current_active
         self.current_active = trade_active
         if not trade_active:
-            self.open_position(Close)
+            # self.open_position(Close)
+            pass
         else:
             pass
+        print(self.main_df)
 
     def on_close(self, ws, close_status_code, close_msg):
         print("WebSocket closed")
@@ -101,9 +103,8 @@ class DataCollector:
     def live_edit(self, df2):
         df2 = list(df2.values())
         self.main_df.iloc[-1] = df2
-        if len(self.main_df) == self.prev_limit * 1.5:
-            drop_num = self.prev_limit / 2
-            self.main_df = self.main_df.drop(self.main_df.index[:drop_num]).reset_index(drop=True)
+        if len(self.main_df) == 150:
+            self.main_df = self.main_df.drop(self.main_df.index[:50]).reset_index(drop=True)
 
     # def supertrend(self, atr, multiplier=3):
     #     # Initialize the Average True Range (ATR) from the ta library
@@ -272,7 +273,7 @@ class DataCollector:
             candle_comparison_short,
             # not swing_high_low_condition,
         ] 
-        # print("=======================")
+        # print("=======================")q
         # print(f"rsi = {rsi.iloc[-1]}")
         # print(f"volume_qualify = {self.buy_volume > volume_threshold}")
         # print(f"bb_upper_qualify = {bb_upper_qualify} ({current_price} < {self.bollinger_bands()[1].iloc[-1]})")
