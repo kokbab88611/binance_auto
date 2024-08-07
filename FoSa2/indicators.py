@@ -1,5 +1,7 @@
 import ta
 import pandas as pd
+import requests
+import matplotlib.pyplot as plt
 
 class Indicator:
     def EMA(main_df):
@@ -9,7 +11,7 @@ class Indicator:
         return ema_short, ema_medium, ema_long
 
     def vwap(main_df):
-        return ta.volume.VolumeWeightedAveragePrice(main_df['high'], main_df['low'], main_df['close'], main_df['volume'], window = 100)
+        return ta.volume.VolumeWeightedAveragePrice(main_df['high'], main_df['low'], main_df['close'], main_df['volume'], window = 100).volume_weighted_average_price()
 
     def stochastic_rsi(main_df):
         """
@@ -46,6 +48,7 @@ class Indicator:
         bb_lower = bb.bollinger_lband().iat[-1]
         return bb_upper, bb_lower
 
+    
     # def ichimoku(main_df):
     #     ichimoku = ta.trend.IchimokuIndicator(high=main_df['high'], low=main_df['low'], window1=9, window2=26, window3=52)
     #     ichimoku_base = ichimoku.ichimoku_base_line()
@@ -67,7 +70,7 @@ test
 """
 # def get_prev_data() -> pd.DataFrame:
 #     url = 'https://fapi.binance.com/fapi/v1/klines'
-#     params = {'symbol': 'BTCUSDT', 'interval': '5m', 'limit': 100}
+#     params = {'symbol': 'BTCUSDT', 'interval': '5m', 'limit': 200}
 #     response = requests.get(url, params=params).json()
 #     columns = ['openTime', 'open', 'high', 'low', 'close', 'volume']
 #     df = pd.DataFrame(response, columns=columns + ['closeTime', 'assetVolume', 'tradeNum', 'TBBAV', 'TBQAV', 'ignore'])
@@ -85,6 +88,17 @@ test
 # # Fetch data and identify support and resistance levels
 # df = get_prev_data()
 # supports, resistances = identify_support_resistance(df)
-# print(supports)
-# print(resistances)
 
+# # Calculate VWAP using the Indicator class
+# vwap_values = Indicator.vwap(df)
+# print(vwap_values)
+
+# # Plotting the data and VWAP
+# plt.figure(figsize=(14, 7))
+# plt.plot(df['openTime'], df['close'], label='Close Price')
+# plt.plot(df['openTime'], vwap_values, label='VWAP', color='orange')
+# plt.xlabel('Time')
+# plt.ylabel('Price')
+# plt.title('BTCUSDT Price and VWAP')
+# plt.legend()
+# plt.show()

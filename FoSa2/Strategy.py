@@ -1,6 +1,6 @@
 import ta
 import pandas as pd
-import indicators
+from indicators import Indicator
 import requests
 import websocket as wb
 import json
@@ -9,13 +9,13 @@ class Strategy:
     @staticmethod
     def check_trade_signal(df_5m, df_1h):
         # Calculate indicators
-        vwap = indicators.vwap(df_5m).iat[-1]
-        bb_upper, bb_lower = indicators.bollinger_bands(df_5m)
+        vwap = Indicator.vwap(df_5m).iat[-1]
+        bb_upper, bb_lower = Indicator.bollinger_bands(df_5m)
 
         # Calculate Stochastic RSI and RSI for 1h data
-        latest_stoch_d, latest_stoch_k = indicators.stochastic_rsi(df_1h)
-        rsi = indicators.rsi(df_1h).iat[-1]
-        rsi_prev = indicators.rsi(df_1h).iat[-2]
+        latest_stoch_d, latest_stoch_k = Indicator.stochastic_rsi(df_1h)
+        rsi = Indicator.rsi(df_1h).iat[-1]
+        rsi_prev = Indicator.rsi(df_1h).iat[-2]
 
         # Determine if VWAP is within Bollinger Bands
         is_vwap_within_bb = bb_lower <= vwap <= bb_upper
