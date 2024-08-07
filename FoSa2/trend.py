@@ -6,7 +6,7 @@ import requests
 
 class PatternDetection:
     @staticmethod
-    def live_detect_box_pattern(ema_medium, atr, closed, atr_multiplier=0.1, box_status = None):
+    def live_detect_box_pattern(ema_medium, atr, is_closed, atr_multiplier=0.1, box_status = None):
         atr_threshold = atr.mean() * atr_multiplier
 
         if len(ema_medium) < 2:
@@ -14,7 +14,7 @@ class PatternDetection:
             
         ema_diff = abs(ema_medium.iloc[-1] - ema_medium.iloc[-2])
         
-        if closed:
+        if is_closed:
             if ema_diff < atr_threshold:
                 if box_status and (box_status[-1] == 0.5 or box_status[-1] == 1):
                     box_status.append(1)
