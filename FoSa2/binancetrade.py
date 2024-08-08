@@ -12,26 +12,20 @@ class BinanceTrade:
         self.fee = (0.06 / 100) 
         self.exchange_info = self.client.exchange_info()
 
-    def set_atr_based_sl_tp(self, entry_price, position, balance = 0, quantity = 0):
+    def set_atr_based_sl_tp(self, entry_price, position, atr, quantity = 0):
+        balance = self.fetch_balance() 
         balance *= self.leverage
-        simple_fee_usdt = balance * (0.063 / 100) #hardcode for bnb 
-        fee_proifit_val = simple_fee_usdt/quantity
-        one_percent_calc = entry_price * (0.01/self.leverage)
-        long_minimum_tp = entry_price + fee_proifit_val + one_percent_calc
-        short_minimum_tp = entry_price - fee_proifit_val - one_percent_calc
-        if atr > 2:
-            atr = 2
-        # Total required return to ensure minimum profit after fees
+        simple_fee_usdt = balance * (0.063 / 100)
+
         if position == "long":
-            stop_loss_price = entry_price - (atr * 0.9)
-            atr_based_tp = entry_price + (atr * 1)
-            take_profit_price = max(atr_based_tp, long_minimum_tp)
-        # Adjust take-profit to ensure at least 1% profit after fees
+            tp_price = entry_price - (atr * 1.75)
+            sl_price = entry_price - (atr * 1.5)
+
         elif position == "short":
-            stop_loss_price = entry_price + (atr * 0.9)
-            atr_based_tp = entry_price - (atr * 1)
-            take_profit_price = min(atr_based_tp, short_minimum_tp)
-        return str(round(take_profit_price,2)), str(round(stop_loss_price,2))
+            tp_price = entry_price + (atr * 1.75)
+            sl_price = entry_price - (atr * 1.5)
+
+        return str(round(tp_price, 2)), str(round(sl_price,2))
 
     def get_symbol_info(self, symbol: str):
         symbol = symbol.upper()
@@ -50,13 +44,13 @@ class BinanceTrade:
             # balance = next(x for x in response if x['asset'] == "USDT")['balance']
             available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
             print(f"Available Balance: {available_balance}")
-            return round(float(available_balance),3)
+            return round(float(available_balance),3) // 0.01 / 100 # floor down to 2 decimal
         except ClientError as e:
             print(f"Error fetching balance: {e}")
             return None
 
     def calculate_quantity(self, available_balance, price):
-        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.9 ,3)
+        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.95 ,3)
         return max_quantity
 
     def set_leverage(self):
