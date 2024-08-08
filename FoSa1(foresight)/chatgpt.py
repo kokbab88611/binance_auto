@@ -169,7 +169,7 @@ class DataCollector:
         return ta.momentum.RSIIndicator(self.main_df['close'], window=14).rsi()
 
     def VWAP(self):
-        return ta.volume.VolumeWeightedAveragePrice(self.main_df['high'], self.main_df['low'], self.main_df['close'], self.main_df['volume']).volume_weighted_average_price()
+        return ta.volume.VolumeWeightedAveragePrice(self.main_df['high'], self.main_df['low'], self.main_df['close'], self.main_df['volume']) 
 
     def ATR(self):
         return ta.volatility.AverageTrueRange(self.main_df['high'], self.main_df['low'], self.main_df['close']).average_true_range()

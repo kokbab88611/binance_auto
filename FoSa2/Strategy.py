@@ -4,6 +4,7 @@ from indicators import Indicator
 import requests
 import websocket as wb
 import json
+from ressup import SupportResistanceLevels as SRL
 
 class Strategy:
     @staticmethod
@@ -23,6 +24,10 @@ class Strategy:
         # Check Stochastic RSI condition
         is_stoch_rsi_long = latest_stoch_k > latest_stoch_d
         is_stoch_rsi_short = latest_stoch_k < latest_stoch_d
+        
+        ema_9, ema_15 = Indicator.EMA(df_5m, 9), Indicator.EMA(df_5m, 15)
+        ema_cross_long = ema_9.iat[-1] > ema_15.iat[-1] and ema_9.iat[-2] <= ema_15.iat[-2]
+        ema_cross_short = ema_9.iat[-1] < ema_15.iat[-1] and ema_9.iat[-2] >= ema_15.iat[-2]
 
         # Check RSI trend
         is_rsi_up = rsi > rsi_prev
@@ -30,11 +35,11 @@ class Strategy:
 
         # Default scenarios if none provided
         long_scenarios = [
-            is_vwap_within_bb and is_stoch_rsi_long and is_rsi_up,
+            is_vwap_within_bb and is_stoch_rsi_long and is_rsi_up and ema_cross_long
         ]
     
         short_scenarios = [
-            is_vwap_within_bb and is_stoch_rsi_short and is_rsi_down,
+            is_vwap_within_bb and is_stoch_rsi_short and is_rsi_down and ema_cross_short
         ]
 
         # Evaluate scenarios
@@ -50,5 +55,11 @@ class Strategy:
             print("No Trade Signal")
 
     @staticmethod
-    def box_trend_strategy(df_5m):
+    def box_trend_strategy(df_15m, df_5m):
+        resistance, support = SRL.identify_levels(df_15m)
+        resistance_levels_filtered = SRL.remove_anomalies(resistance, resistance.iat[-1])
+        support_levels_filtered = SRL.remove_anomalies(support, support.iat[-1])
+        
+        resistance_mean = resistance_levels_filtered.mean()
+        support_mean = support_levels_filtered.mean()
         pass

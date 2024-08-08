@@ -6,13 +6,17 @@ import requests
 
 class PatternDetection:
     @staticmethod
-    def live_detect_box_pattern(ema_medium, atr, is_closed, atr_multiplier=0.1, box_status = None):
+    def live_detect_box_pattern(main_df, is_closed, atr_multiplier=0.1, box_status = None):
+
+        ema_15 = Indicator.EMA(main_df, 15)
+        atr = Indicator.atr(main_df)
+
         atr_threshold = atr.mean() * atr_multiplier
 
-        if len(ema_medium) < 2:
+        if len(ema_15) < 2:
             return
             
-        ema_diff = abs(ema_medium.iloc[-1] - ema_medium.iloc[-2])
+        ema_diff = abs(ema_15.iloc[-1] - ema_15.iloc[-2])
         
         if is_closed:
             if ema_diff < atr_threshold:
@@ -37,7 +41,7 @@ class PatternDetection:
 
     @staticmethod
     def box_pattern_init(main_df, atr_multiplier = 0.05):
-        ema_medium = Indicator.EMA(main_df)[1] #1 index에 medium series가 있음
+        ema_15 = Indicator.EMA(main_df, 15) #1 index에 medium series가 있음
         atr = Indicator.atr(main_df)
         
         # Get the recent 5 ATR mean values
@@ -46,7 +50,7 @@ class PatternDetection:
         # print(f"ATR Threshold: {atr_threshold}")
         
         # Only check the last 3 EMA differences
-        ema_diffs = abs(ema_medium.diff().dropna().iloc[-3:])
+        ema_diffs = abs(ema_15.diff().dropna().iloc[-3:])
         # print(f"Last 3 EMA Differences: {ema_diffs.values}, ATR Threshold: {atr_threshold}")
         
         box_status = deque([1 if diff < atr_threshold else 0 for diff in ema_diffs], maxlen=5)

@@ -4,11 +4,9 @@ import requests
 import matplotlib.pyplot as plt
 
 class Indicator:
-    def EMA(main_df):
-        ema_short = ta.trend.EMAIndicator(main_df['close'], window=9).ema_indicator()
-        ema_medium = ta.trend.EMAIndicator(main_df['close'], window=21).ema_indicator()
-        ema_long = ta.trend.EMAIndicator(main_df['close'], window=100).ema_indicator()
-        return ema_short, ema_medium, ema_long
+    def EMA(main_df, length):
+        ema = ta.trend.EMAIndicator(main_df['close'], window=length).ema_indicator()
+        return ema
 
     def vwap(main_df):
         return ta.volume.VolumeWeightedAveragePrice(main_df['high'], main_df['low'], main_df['close'], main_df['volume'], window = 100).volume_weighted_average_price()
@@ -58,6 +56,7 @@ class Indicator:
     #     return ichimoku_base, ichimoku_conversion, ichimoku_span_a, ichimoku_span_b
 
     # def check_uptrend(ema_short, ema_medium, ema_long, main_df):
+    #     #***EMA 변경해서 패치 필요***
     #     uptrend = (ema_short.iloc[-1] > ema_medium.iloc[-1] > ema_long.iloc[-1]) and (ema_short.iloc[-2] > ema_medium.iloc[-2] > ema_long.iloc[-2])
     #     return uptrend
 

@@ -1,14 +1,10 @@
-from binance.um_futures import UMFutures
-from binance.error import ClientError
+
 from threading import Thread, Event
 from datetime import datetime
 import numpy as np
 from collector import CollectData
-import ta
 import pandas as pd
-import requests
 import websocket as wb
-import json
 import trend
 from strategy import Strategy  # Ensure you have Strategy class with required methods
 
@@ -34,11 +30,9 @@ class Bot:
             return
         
         fifteen_min_data = self.fifteen_min_data.main_df
-        ema_medium = trend.Indicator.EMA(fifteen_min_data)[1]
-        atr = trend.Indicator.atr(fifteen_min_data)
         is_closed = self.fifteen_min_data.isClosed
         self.box_status = trend.PatternDetection.live_detect_box_pattern(
-            ema_medium, atr, is_closed, atr_multiplier=0.1, box_status=self.box_status
+            fifteen_min_data, is_closed, atr_multiplier=0.1, box_status=self.box_status
         )
         print(f"Updated Box Status: {self.box_status}")
 
