@@ -7,7 +7,7 @@ import pandas as pd
 import websocket as wb
 import trend
 from strategy import Strategy  # Ensure you have Strategy class with required methods
-
+from binancetrade import BinanceTrade
 class Bot:
     def __init__(self) -> None:
         self.symbol = "btcusdt"
@@ -72,6 +72,7 @@ class Bot:
 
 if __name__ == "__main__":
     bot = Bot()
+    binance_trade = BinanceTrade()
     try:
         while True:
             pass

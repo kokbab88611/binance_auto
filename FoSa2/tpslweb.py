@@ -9,7 +9,7 @@ class TpSlWeb:
         atr = Indicator.atr(df_5m)
         pass
 
-    def set_atr_based_sl_tp(self, entry_price, atr, position, balance = 0, quantity = 0):
+    def set_atr_based_sl_tp(self, entry_price, atr, position, quantity = 0):
         balance *= self.leverage
         simple_fee_usdt = balance * (0.063 / 100) #hardcode for bnb 
         fee_proifit_val = simple_fee_usdt/quantity
