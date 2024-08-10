@@ -6,13 +6,13 @@ import json
 
 class CollectData:
     def __init__(self, symbol, interval, callback=None) -> None:
-        print(f'{interval} 받음')
         self.symbol = symbol
         self.interval = interval
         self.isClosed = None
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.main_df = CollectData.get_prev_data(symbol, interval)
         self.callback = callback
+        self.ws = None
         websocket_thread_kline = Thread(target=self.websocket_thread_kline)
         websocket_thread_kline.start()
 
@@ -29,7 +29,6 @@ class CollectData:
             'volume': float(kline_data['v'])
         }
         self.live_edit(df2)
-        print(self.main_df)
         if self.isClosed:
             self.main_df = self.add_frame(df2)
             self.isClosed = None
@@ -44,14 +43,19 @@ class CollectData:
     def on_error(self, ws, error):
         print(f"WebSocket error: {error}")
 
+    def close_websocket(self):
+        if self.ws:
+            self.ws.close()
+            self.websocket_thread.join()
+
     def websocket_thread_kline(self):
-        ws = wb.WebSocketApp(
+        self.ws = wb.WebSocketApp(
             url=self.websocket_url,
             on_message=self.on_message_kline,
             on_close=self.on_close,
             on_error=self.on_error
         )
-        ws.run_forever()
+        self.ws.run_forever()
 
     @staticmethod
     def get_prev_data(symbol, interval) -> pd.DataFrame:
@@ -76,5 +80,5 @@ class CollectData:
             self.main_df = self.main_df.iloc[int(5):].reset_index(drop=True)
 
 if __name__ == "__main__":
-    bot = CollectData("btcusdt", "30m")
+    bot = CollectData("btcusdt", "1h")
     print(bot.main_df)

@@ -31,7 +31,6 @@ class Indicator:
         stoch_k = stoch_rsi.stochrsi_k()
         latest_stoch_d = stoch_d.iat[-1]
         latest_stoch_k = stoch_k.iat[-1]
-        print(type(latest_stoch_d))
         return latest_stoch_d, latest_stoch_k
 
     def rsi(main_df):

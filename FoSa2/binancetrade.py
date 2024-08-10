@@ -5,16 +5,16 @@ import time
 from datetime import datetime
 
 class BinanceTrade:
-    def __init__(self):
+    def __init__(self, symbol):
         self.api_key = os.getenv('Bin_API_KEY')
         self.api_secret = os.getenv('Bin_SECRET_KEY')
         self.client = UMFutures(key=self.api_key, secret=self.api_secret)
         self.leverage = 15
         self.fee = (0.06 / 100) 
-        self.binance
+        self.symbol = symbol
 
-    def market_open_position(self, side, position_side):
-        calced_quantity = self.calculate_quantity()
+    def market_open_position(self, side, position_side, current_price):
+        calced_quantity = self.calculate_quantity(current_price)
         self.order(symbol=self.symbol.upper(), side = side, position_side = position_side, quantity=calced_quantity)
         return calced_quantity
 
@@ -67,7 +67,7 @@ class BinanceTrade:
             print(f"Error fetching balance: {e}")
             return None
 
-    def calculate_quantity(self, available_balance, price):
+    def calculate_quantity(self, price):
         available_balance = self.fetch_balance()
         max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.95 ,3)
         return max_quantity
@@ -98,9 +98,9 @@ class BinanceTrade:
                 if price:
                     params.update({"price": price})
 
-            # print('================================================================')
-            # print(f"Placing order with params: {params}")
-            # print('================================================================')
+            print('================================================================')
+            print(f"Placing order with params: {params}")
+            print('================================================================')
 
             # response = self.client.new_order(**params)
             # print(f"Order placed: {response}")
@@ -112,6 +112,20 @@ class BinanceTrade:
                 time.sleep(5)
                 self.order(symbol, side, position_side, quantity, order_type, price, stop_price, close_position)
             return None
+
+    def check_open_orders(self):
+        all_orders = self.client.get_orders(symbol=self.symbol)
+        if len(all_orders) > 0:
+            return True
+        else:
+            False
+
+    def close_all_orders(self):   
+        all_orders = self.client.get_orders(symbol=self.symbol)
+        if len(all_orders) == 1:
+            self.client.cancel_order(symbol=self.symbol, orderId=all_orders[0]['orderId'], origClientOrderId=all_orders[0]['clientOrderId'])
+            self.start_cooldown()
+
 
 if __name__ == "__main__":
     trader = BinanceTrade()

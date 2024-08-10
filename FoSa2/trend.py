@@ -30,7 +30,7 @@ class PatternDetection:
                 box_status.append(0)
         else:
             if ema_diff < atr_threshold:
-                if box_status and (box_status[-1] == 0.5 or box_status[-1] == 1):
+                if box_status and (box_status[-2] == 0.5 or box_status[-2] == 1):
                     box_status[-1] = 1
                 else:
                     box_status[-1] = 0.5
