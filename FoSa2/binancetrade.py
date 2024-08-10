@@ -11,15 +11,17 @@ class BinanceTrade:
         self.client = UMFutures(key=self.api_key, secret=self.api_secret)
         self.leverage = 15
         self.fee = (0.06 / 100) 
-        self.exchange_info = self.client.exchange_info()
-    
-    def market_open_position(self, side = "BUY", position_side="LONG", calced_quantity = 0):
-        self.order(symbol=self.symbol.upper(), side = side, position_side = position_side, quantity=calced_quantity)
+        self.binance
 
-    def set_atr_based_sl_tp(self, entry_price, position, atr, quantity, atr_multiplier_tp, atr_multiplier_sl):
+    def market_open_position(self, side, position_side):
+        calced_quantity = self.calculate_quantity()
+        self.order(symbol=self.symbol.upper(), side = side, position_side = position_side, quantity=calced_quantity)
+        return calced_quantity
+
+    def order_sl_tp(self, entry_price, position, atr, quantity, atr_multiplier_tp, atr_multiplier_sl):
         balance = self.fetch_balance() 
         balance *= self.leverage
-        fee_approx = balance
+
         simple_fee_usdt = balance * (0.07 / 100) # 0.07은 fee%
         fee_proifit_val = simple_fee_usdt/quantity
         one_percent_calc = entry_price * (0.01/self.leverage)
@@ -30,16 +32,22 @@ class BinanceTrade:
             tp_price = entry_price + (atr * atr_multiplier_tp)
             sl_price = entry_price - (atr * atr_multiplier_sl)
             take_profit_price = max(tp_price, long_minimum_tp)
+            self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=quantity, order_type="TAKE_PROFIT", price=take_profit_price, stop_price=take_profit_price, close_position=True)
+            self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=quantity, order_type="STOP", price=sl_price, stop_price=sl_price, close_position=True)
         elif position == "short":
             tp_price = entry_price - (atr * atr_multiplier_tp)
             sl_price = entry_price + (atr * atr_multiplier_sl)
-            take_profit_price = max(tp_price, long_minimum_tp)
-
-        return str(round(take_profit_price, 2)), str(round(sl_price,2))
+            take_profit_price = max(tp_price, short_minimum_tp)
+            self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=quantity, order_type="TAKE_PROFIT", price=take_profit_price, stop_price=take_profit_price, close_position=True)
+            self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=quantity, order_type="STOP", price=sl_price, stop_price=sl_price, close_position=True)
+        print('================================================================')
+        print(f"Opened long position at {entry_price}, Target Profit Price: {take_profit_price}, Stop Loss Price: {sl_price}")
+        print('================================================================')
 
     def get_symbol_info(self, symbol: str):
+        exchange_info = self.client.exchange_info()
         symbol = symbol.upper()
-        for s in self.exchange_info['symbols']:
+        for s in exchange_info['symbols']:
             if s['symbol'] == symbol:
                 # print(s)
                 tick_size = s['filters'][0]['tickSize']
@@ -60,6 +68,7 @@ class BinanceTrade:
             return None
 
     def calculate_quantity(self, available_balance, price):
+        available_balance = self.fetch_balance()
         max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.95 ,3)
         return max_quantity
 
@@ -103,60 +112,6 @@ class BinanceTrade:
                 time.sleep(5)
                 self.order(symbol, side, position_side, quantity, order_type, price, stop_price, close_position)
             return None
-
-    def long(self, current_price, atr):
-        if self.in_cooldown:
-            return
-        self.set_leverage()
-        available_balance = self.fetch_balance()
-        if available_balance is None or available_balance <= 0:
-            print("Insufficient available balance to place order")
-            return
-
-        calced_quantity = self.calculate_quantity(available_balance, current_price)
-        self.market_open_position(quantity=calced_quantity) # 빠른 시장가 매매
-        in_atr = round(atr.iloc[-1], 2)
-        enter_price = current_price
-        price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "long", balance=available_balance, quantity=calced_quantity)
-        print(price_profit, price_stoploss)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="LONG", quantity=calced_quantity)
-        time.sleep(1)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", price=price_profit, stop_price=price_profit, close_position=True)
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", price=price_stoploss, stop_price=price_stoploss, close_position=True)
-
-        self.save_result(f"Opened long position at {current_price}")
-        print('================================================================')
-        print(f"Opened long position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
-        print('================================================================')
-
-    def short(self, current_price, atr):
-        if self.in_cooldown:
-            return
-        self.set_leverage()
-        available_balance = self.fetch_balance()
-        if available_balance is None or available_balance <= 0:
-            print("Insufficient available balance to place order")
-            return
-        calced_quantity = self.calculate_quantity(available_balance, current_price)
-        in_atr = round(atr.iloc[-1], 2)
-        enter_price = current_price
-        price_profit, price_stoploss = self.set_atr_based_sl_tp(enter_price, in_atr, "short", balance=available_balance, quantity= calced_quantity)
-
-        self.order(symbol=self.symbol.upper(), side="SELL", position_side="SHORT", quantity=calced_quantity)
-        time.sleep(1)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="TAKE_PROFIT", price=price_profit, stop_price=price_profit, close_position=True)
-        self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", price=price_stoploss, stop_price=price_stoploss, close_position=True)
-
-        self.save_result(f"Opened short position at {current_price}")
-        print('================================================================')
-        print(f"Opened short position at {current_price}, Target Profit Price: {price_profit}, Stop Loss Price: {price_stoploss}")
-        print('================================================================')
-
-    def save_result(self, message):
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        log_message = f"{current_time} - {message}"
-        with open(self.results_file, "a") as file:
-            file.write(log_message + "\n")
 
 if __name__ == "__main__":
     trader = BinanceTrade()

@@ -76,4 +76,5 @@ class CollectData:
             self.main_df = self.main_df.iloc[int(5):].reset_index(drop=True)
 
 if __name__ == "__main__":
-    bot = CollectData("btcusdt", "5m")
+    bot = CollectData("btcusdt", "30m")
+    print(bot.main_df)
