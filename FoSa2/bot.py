@@ -19,6 +19,12 @@ class Bot:
         self.min_data_5 = CollectData(self.symbol, "5m", self.on_new_data)
 
         self.binance_trade = BinanceTrade(self.symbol)
+        self.binance_trade.set_leverage(15)
+        self.print_status_event = Event()
+        self.print_status_thread = Thread(target=self.print_box_status_periodically)
+        self.print_status_thread.start()
+
+        self.position_open_status = False
 
     def box_initialisation(self, interval):
         fifteen_prev = CollectData.get_prev_data(self.symbol, interval)
@@ -28,16 +34,15 @@ class Bot:
     def check_trend(self):
         if not self.is_data_initialized():
             return
-        
         fifteen_min_data = self.min_data_15.main_df
         is_closed = self.min_data_15.isClosed
-        print(is_closed)
         self.box_status = PatternDetection.live_detect_box_pattern(
             fifteen_min_data, is_closed, atr_multiplier=0.1, box_status=self.box_status
         )
-        print(f"Updated Box Status: {self.box_status}")
 
     def execute_strategy(self):
+        self.position_open_status = self.binance_trade.check_open_orders()
+
         if not self.is_data_initialized():
             return
         df_5m = self.min_data_5.main_df
@@ -45,10 +50,14 @@ class Bot:
         df_30m = self.min_data_30.main_df
         df_1h = self.hour_data_1.main_df
         self.check_trend()
-        if self.box_status[-1] == 0:  # Not in a box trend
-            Strategy.check_trade_signal(df_5m, df_15m, df_1h, self.binance_trade)
-        else:  # In a box trend
-            Strategy.box_trend_strategy(df_5m, df_15m, df_30m, self.binance_trade)
+        if not self.position_open_status:
+            if self.box_status[-1] == 0:  # Not in a box trend
+                self.position_open_status = Strategy.check_trade_signal(df_5m, df_15m, df_1h, self.binance_trade)
+            else:  # In a box trend
+                self.position_open_status = Strategy.box_trend_strategy(df_5m, df_15m, df_30m, self.binance_trade)
+        else:
+            self.binance_trade.close_one_order()
+            pass
 
     def on_new_data(self):
         # Execute strategy every time new data is updated
@@ -61,6 +70,13 @@ class Bot:
             self.min_data_15.main_df is not None and not self.min_data_15.main_df.empty and
             self.hour_data_1.main_df is not None and not self.hour_data_1.main_df.empty
         )
+
+    def print_box_status_periodically(self):
+        # Print the box status every 5 minutes
+        while not self.print_status_event.is_set():
+            print(f"Box Status: {self.box_status}")
+            self.print_status_event.wait(300)  
+                
 
     def stop(self):
         # Close all WebSocket connections before stopping

@@ -53,15 +53,17 @@ class Strategy:
         # Trade signal
         if long_condition:
             quantity = binancetrade.market_open_position(side="BUY", position_side="LONG", current_price=current_price)
-            binancetrade.order_sl_tp(current_price, "long" , atr_15m, quantity, atr_multiplier_tp=2, atr_multiplier_sl=1.75)
+            binancetrade.order_sl_tp(current_price, "long" , atr_15m, quantity, atr_multiplier_tp=1.75, atr_multiplier_sl=1.5)
             print("Enter Long Position")
+            return True
         elif short_condition:
             quantity = binancetrade.market_open_position(side="SELL", position_side="SHORT", current_price=current_price)
-            binancetrade.order_sl_tp(current_price, "short" , atr_15m, quantity, atr_multiplier_tp=2, atr_multiplier_sl=1.75)
+            binancetrade.order_sl_tp(current_price, "short" , atr_15m, quantity, atr_multiplier_tp=1.75, atr_multiplier_sl=1.5)
             print("Enter Short Position")
+            return True
         else:
             # print("No Trade Signal")
-            pass
+            return False
 
     @staticmethod
     def box_trend_strategy(df_5m, df_15m, df_30m, binancetrade):
@@ -80,8 +82,8 @@ class Strategy:
         recent_low_30 = recent_30_min['low'].min()
         recent_high_30 = recent_30_min['high'].max()
         # Calculate the 9 EMA and 15 EMA
-        ema_9 = Indicator.EMA(df_5m, length=9)
-        ema_15 = Indicator.EMA(df_5m, length=15)
+        ema_9 = Indicator.EMA(df_15m, length=9)
+        ema_15 = Indicator.EMA(df_15m, length=15)
         # Calculate ATR for 5m
         atr_5m = Indicator.atr(df_5m).iat[-1]
         atr_15m = Indicator.atr(df_15m).iat[-1]
@@ -89,18 +91,19 @@ class Strategy:
         # 박스 돌파권
         if (current_price > resistance_mean + atr_5m) and (current_price > recent_high_30):
             #롱 돌파
-            Strategy.box_breakout('long', df_5m, df_15m, atr_15m, current_price, binancetrade)
+            position_opened = Strategy.box_breakout('long', df_5m, df_15m, atr_15m, current_price, binancetrade)
+            return position_opened
         elif (current_price < support_mean - atr_5m) and (current_price < recent_low_30):
             #숏 돌파
-            Strategy.box_breakout('short', df_5m, df_15m, atr_15m, current_price, binancetrade)
-
+            position_opened = Strategy.box_breakout('short', df_5m, df_15m, atr_15m, current_price, binancetrade)
+            return position_opened
         # 박스권 롱
         if support_mean <= current_price <= resistance_mean:
             if ema_9.iat[-1] > ema_15.iat[-1] and ema_9.iat[-2] <= ema_15.iat[-2]:
                 print(f"Long entry at {current_price}. EMA 9 crossed above EMA 15.")
                 quantity = binancetrade.market_open_position(side="BUY", position_side="LONG", current_price=current_price)
                 binancetrade.order_sl_tp(current_price, "long" ,atr_15m, quantity, atr_multiplier_tp=1.5, atr_multiplier_sl=1.25)
-                # Logic for placing a long order
+                return True
 
         # 박스권 숏
         if resistance_mean >= current_price >= support_mean:
@@ -108,7 +111,8 @@ class Strategy:
                 print(f"Short entry at {current_price}. EMA 9 crossed below EMA 15.")
                 quantity = binancetrade.market_open_position(side="SELL", position_side="SHORT", current_price=current_price)
                 binancetrade.order_sl_tp(current_price, "short" ,atr_15m, quantity, atr_multiplier_tp=1.5, atr_multiplier_sl=1.25)
-                # Logic for placing a short order
+                return True
+        return False
 
     @staticmethod
     def box_breakout(trend, df_5m, df_15m, atr_15m, current_price, binancetrade):
@@ -125,10 +129,12 @@ class Strategy:
             print(f"Confirmed long breakout with 9 EMA crossing above 15 EMA at {df_5m['close'].iat[-1]}.")
             quantity = binancetrade.market_open_position(side="BUY", position_side="LONG", current_price=current_price)
             binancetrade.order_sl_tp(current_price, "long", atr_15m, quantity, atr_multiplier_tp=1.5, atr_multiplier_sl=1.25)
+            return True
         elif trend == 'short' and ema_cross_short:
             print(f"Confirmed short breakout with 9 EMA crossing below 15 EMA at {df_5m['close'].iat[-1]}.")
             quantity = binancetrade.market_open_position(side="SELL", position_side="SHORT", current_price=current_price)
             binancetrade.order_sl_tp(current_price, "short", atr_15m, quantity, atr_multiplier_tp=1.5, atr_multiplier_sl=1.25)
+            return True
         else:
-            print(f"No valid breakout signal. EMA cross not aligned with the trend direction at {df_5m['close'].iat[-1]}.")
+            return False
 

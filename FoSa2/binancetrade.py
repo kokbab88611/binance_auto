@@ -72,9 +72,9 @@ class BinanceTrade:
         max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.95 ,3)
         return max_quantity
 
-    def set_leverage(self):
+    def set_leverage(self, leverage):
         try:
-            response = self.client.change_leverage(symbol=self.symbol.upper(), leverage=self.leverage)
+            response = self.client.change_leverage(symbol=self.symbol.upper(), leverage=leverage)
             print(f"Leverage set to {response['leverage']}")
         except ClientError as e:
             print(f"Error setting leverage: {e}")
@@ -120,12 +120,12 @@ class BinanceTrade:
         else:
             False
 
-    def close_all_orders(self):   
+    def close_one_order(self):   
         all_orders = self.client.get_orders(symbol=self.symbol)
         if len(all_orders) == 1:
             self.client.cancel_order(symbol=self.symbol, orderId=all_orders[0]['orderId'], origClientOrderId=all_orders[0]['clientOrderId'])
-            self.start_cooldown()
-
+        else:
+            pass
 
 if __name__ == "__main__":
     trader = BinanceTrade()
@@ -134,6 +134,3 @@ if __name__ == "__main__":
         print(f"Symbol Info: {symbol_info}")
     else:
         print("Symbol not found.")
-
-    has_open_orders = trader.check_open_orders("BTCUSDT")
-    print(f"Has open orders: {has_open_orders}")
