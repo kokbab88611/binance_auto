@@ -9,13 +9,13 @@ class BinanceTrade:
         self.api_key = os.getenv('Bin_API_KEY')
         self.api_secret = os.getenv('Bin_SECRET_KEY')
         self.client = UMFutures(key=self.api_key, secret=self.api_secret)
-        self.leverage = 15
         self.fee = (0.06 / 100) 
         self.symbol = symbol
+        self.log_file = f"{symbol}_trade_log.txt"  # Log file named after the symbol
 
     def market_open_position(self, side, position_side, current_price):
         calced_quantity = self.calculate_quantity(current_price)
-        self.order(symbol=self.symbol.upper(), side = side, position_side = position_side, quantity=calced_quantity)
+        self.order(symbol=self.symbol.upper(), side=side, position_side=position_side, quantity=calced_quantity)
         return calced_quantity
 
     def order_sl_tp(self, entry_price, position, atr, quantity, atr_multiplier_tp, atr_multiplier_sl):
@@ -23,8 +23,8 @@ class BinanceTrade:
         balance *= self.leverage
 
         simple_fee_usdt = balance * (0.07 / 100) # 0.07은 fee%
-        fee_proifit_val = simple_fee_usdt/quantity
-        one_percent_calc = entry_price * (0.01/self.leverage)
+        fee_proifit_val = simple_fee_usdt / quantity
+        one_percent_calc = entry_price * (0.01 / self.leverage)
         long_minimum_tp = entry_price + fee_proifit_val + one_percent_calc
         short_minimum_tp = entry_price - fee_proifit_val - one_percent_calc
 
@@ -40,36 +40,32 @@ class BinanceTrade:
             take_profit_price = max(tp_price, short_minimum_tp)
             self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=quantity, order_type="TAKE_PROFIT", price=take_profit_price, stop_price=take_profit_price, close_position=True)
             self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=quantity, order_type="STOP", price=sl_price, stop_price=sl_price, close_position=True)
-        print('================================================================')
-        print(f"Opened long position at {entry_price}, Target Profit Price: {take_profit_price}, Stop Loss Price: {sl_price}")
-        print('================================================================')
+        
+        self.log_trade(f"Opened {position} position at {entry_price}, TP: {take_profit_price}, SL: {sl_price}")
 
     def get_symbol_info(self, symbol: str):
         exchange_info = self.client.exchange_info()
         symbol = symbol.upper()
         for s in exchange_info['symbols']:
             if s['symbol'] == symbol:
-                # print(s)
                 tick_size = s['filters'][0]['tickSize']
-                price_prcision = s['pricePrecision']
-                quantity_prcision = s['quantityPrecision']
-                # print(f"Tick Size: {tick_size}, Price Precision: {price_prcision}, Quantity precision: {quantity_prcision}")
+                price_precision = s['pricePrecision']
+                quantity_precision = s['quantityPrecision']
         return None
 
     def fetch_balance(self):
         try:
             response = self.client.balance()
-            # balance = next(x for x in response if x['asset'] == "USDT")['balance']
             available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
             print(f"Available Balance: {available_balance}")
-            return round(float(available_balance),3) // 0.01 / 100 # floor down to 2 decimal
+            return round(float(available_balance), 3) // 0.01 / 100  # floor down to 2 decimal
         except ClientError as e:
             print(f"Error fetching balance: {e}")
             return None
 
     def calculate_quantity(self, price):
         available_balance = self.fetch_balance()
-        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.95 ,3)
+        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.95, 3)
         return max_quantity
 
     def set_leverage(self, leverage):
@@ -80,7 +76,7 @@ class BinanceTrade:
             print(f"Error setting leverage: {e}")
 
     def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
-        quantity = quantity // 0.01 / 100 # floor to 2 dec
+        quantity = quantity // 0.01 / 100  # floor to 2 decimal
         try:
             params = {
                 "symbol": symbol,
@@ -98,13 +94,15 @@ class BinanceTrade:
                 if price:
                     params.update({"price": price})
 
-            print('================================================================')
-            print(f"Placing order with params: {params}")
+            # print('================================================================')
+            # print(f"Placing order with params: {params}")
             print('================================================================')
 
-            # response = self.client.new_order(**params)
-            # print(f"Order placed: {response}")
-            # return response
+            response = self.client.new_order(**params)
+            print(f"Order placed: {response}")
+            return response
+            self.log_trade(f"Order placed: {params}")
+
         except ClientError as e:
             print(f"API error placing order: {e}")
             if 'timestamp' in str(e):
@@ -112,6 +110,13 @@ class BinanceTrade:
                 time.sleep(5)
                 self.order(symbol, side, position_side, quantity, order_type, price, stop_price, close_position)
             return None
+
+    def log_trade(self, message):
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_message = f"{current_time} - {message}"
+        with open(self.log_file, "a") as file:
+            file.write(log_message + "\n")
+        print(log_message)  # Optional: Also print the log message to the console
 
     def check_open_orders(self):
         all_orders = self.client.get_orders(symbol=self.symbol)
@@ -128,7 +133,7 @@ class BinanceTrade:
             pass
 
 if __name__ == "__main__":
-    trader = BinanceTrade()
+    trader = BinanceTrade("BTCUSDT")
     symbol_info = trader.get_symbol_info("BTCUSDT")
     if symbol_info:
         print(f"Symbol Info: {symbol_info}")

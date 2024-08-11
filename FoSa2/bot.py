@@ -88,8 +88,7 @@ class Bot:
 
 if __name__ == "__main__":
     bot = Bot()
-    try:
-        while True:
-            pass
-    except KeyboardInterrupt:
-        bot.stop()
+
+    while True:
+        pass
+
