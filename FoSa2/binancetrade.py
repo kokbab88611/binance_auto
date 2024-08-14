@@ -40,7 +40,7 @@ class BinanceTrade:
         elif position == "short":
             tp_price = entry_price - (atr * atr_multiplier_tp)
             sl_price = entry_price + (atr * atr_multiplier_sl)
-            take_profit_price = max(tp_price, short_minimum_tp)
+            take_profit_price = min(tp_price, short_minimum_tp)
 
             #  datatype 정상화
             sl_price = str(round(sl_price,1))
