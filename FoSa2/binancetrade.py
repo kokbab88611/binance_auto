@@ -11,35 +11,43 @@ class BinanceTrade:
         self.client = UMFutures(key=self.api_key, secret=self.api_secret)
         self.fee = (0.06 / 100) 
         self.symbol = symbol
+        self.leverage = None
         self.log_file = f"{symbol}_trade_log.txt"  # Log file named after the symbol
 
-    def market_open_position(self, side, position_side, current_price):
-        calced_quantity = self.calculate_quantity(current_price)
+    def market_open_position(self, side, position_side, calced_quantity):
         self.order(symbol=self.symbol.upper(), side=side, position_side=position_side, quantity=calced_quantity)
         return calced_quantity
 
-    def order_sl_tp(self, entry_price, position, atr, quantity, atr_multiplier_tp, atr_multiplier_sl):
-        balance = self.fetch_balance() 
+    def order_sl_tp(self, balance, entry_price, position, atr, calced_quantity, atr_multiplier_tp, atr_multiplier_sl):
         balance *= self.leverage
-
         simple_fee_usdt = balance * (0.07 / 100) # 0.07은 fee%
-        fee_proifit_val = simple_fee_usdt / quantity
+        fee_proifit_val = simple_fee_usdt / calced_quantity
         one_percent_calc = entry_price * (0.01 / self.leverage)
         long_minimum_tp = entry_price + fee_proifit_val + one_percent_calc
         short_minimum_tp = entry_price - fee_proifit_val - one_percent_calc
-
+        print(calced_quantity)
         if position == "long":
             tp_price = entry_price + (atr * atr_multiplier_tp)
             sl_price = entry_price - (atr * atr_multiplier_sl)
             take_profit_price = max(tp_price, long_minimum_tp)
-            self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=quantity, order_type="TAKE_PROFIT", price=take_profit_price, stop_price=take_profit_price, close_position=True)
-            self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=quantity, order_type="STOP", price=sl_price, stop_price=sl_price, close_position=True)
+
+            #  datatype 정상화
+            sl_price = str(round(sl_price,1))
+            take_profit_price = str(round(take_profit_price,1))
+
+            self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="TAKE_PROFIT", price=take_profit_price, stop_price=take_profit_price, close_position=True)
+            self.order(symbol=self.symbol.upper(), side="SELL", position_side="LONG", quantity=calced_quantity, order_type="STOP", price=sl_price, stop_price=sl_price, close_position=True)
         elif position == "short":
             tp_price = entry_price - (atr * atr_multiplier_tp)
             sl_price = entry_price + (atr * atr_multiplier_sl)
             take_profit_price = max(tp_price, short_minimum_tp)
-            self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=quantity, order_type="TAKE_PROFIT", price=take_profit_price, stop_price=take_profit_price, close_position=True)
-            self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=quantity, order_type="STOP", price=sl_price, stop_price=sl_price, close_position=True)
+
+            #  datatype 정상화
+            sl_price = str(round(sl_price,1))
+            take_profit_price = str(round(take_profit_price,1))
+
+            self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="TAKE_PROFIT", price=take_profit_price, stop_price=take_profit_price, close_position=True)
+            self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", price=sl_price, stop_price=sl_price, close_position=True)
         
         self.log_trade(f"Opened {position} position at {entry_price}, TP: {take_profit_price}, SL: {sl_price}")
 
@@ -57,7 +65,6 @@ class BinanceTrade:
         try:
             response = self.client.balance()
             available_balance = next(x for x in response if x['asset'] == "USDT")['availableBalance']
-            print(f"Available Balance: {available_balance}")
             return round(float(available_balance), 3) // 0.01 / 100  # floor down to 2 decimal
         except ClientError as e:
             print(f"Error fetching balance: {e}")
@@ -66,17 +73,18 @@ class BinanceTrade:
     def calculate_quantity(self, price):
         available_balance = self.fetch_balance()
         max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.95, 3)
-        return max_quantity
+        return max_quantity, available_balance
 
     def set_leverage(self, leverage):
         try:
             response = self.client.change_leverage(symbol=self.symbol.upper(), leverage=leverage)
+            self.leverage = leverage
             print(f"Leverage set to {response['leverage']}")
         except ClientError as e:
             print(f"Error setting leverage: {e}")
 
     def order(self, symbol, side, position_side, quantity, order_type="MARKET", price=None, stop_price=None, close_position=False):
-        quantity = quantity // 0.01 / 100  # floor to 2 decimal
+        # quantity = quantity // 0.01 / 10  # floor to 2 decimal
         try:
             params = {
                 "symbol": symbol,
@@ -100,8 +108,8 @@ class BinanceTrade:
 
             response = self.client.new_order(**params)
             print(f"Order placed: {response}")
-            return response
             self.log_trade(f"Order placed: {params}")
+            return response
 
         except ClientError as e:
             print(f"API error placing order: {e}")
@@ -129,12 +137,13 @@ class BinanceTrade:
         all_orders = self.client.get_orders(symbol=self.symbol)
         if len(all_orders) == 1:
             self.client.cancel_order(symbol=self.symbol, orderId=all_orders[0]['orderId'], origClientOrderId=all_orders[0]['clientOrderId'])
+            return True
         else:
             pass
 
 if __name__ == "__main__":
-    trader = BinanceTrade("BTCUSDT")
-    symbol_info = trader.get_symbol_info("BTCUSDT")
+    trader = BinanceTrade("btcusdt")
+    symbol_info = trader.get_symbol_info("btcusdt")
     if symbol_info:
         print(f"Symbol Info: {symbol_info}")
     else:

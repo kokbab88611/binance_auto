@@ -6,39 +6,39 @@ import requests
 
 class PatternDetection:
     @staticmethod
-    def live_detect_box_pattern(main_df, is_closed, atr_multiplier=0.1, box_status = None):
-
+    def box_is_closed(main_df,  atr_multiplier=0.1, box_status=None):
         ema_15 = Indicator.EMA(main_df, 15)
         atr = Indicator.atr(main_df)
 
         atr_threshold = atr.mean() * atr_multiplier
-
-        if len(ema_15) < 2:
-            return
-            
         ema_diff = abs(ema_15.iloc[-1] - ema_15.iloc[-2])
-        
-        if is_closed:
-            if ema_diff < atr_threshold:
-                if box_status and (box_status[-1] == 0.5 or box_status[-1] == 1):
-                    box_status.append(1)
-                else:
-                    box_status.append(0.5)
+
+        if ema_diff < atr_threshold:
+            if (box_status[-1] == 0.5 or box_status[-1] == 1):
+                box_status.append(1)
             else:
-                if box_status and (box_status[-1] == 0.5):
-                    box_status[-1] = 0
-                box_status.append(0)
+                box_status.append(0.5)
         else:
-            if ema_diff < atr_threshold:
-                if box_status and (box_status[-2] == 0.5 or box_status[-2] == 1):
-                    box_status[-1] = 1
-                else:
-                    box_status[-1] = 0.5
-            else:
-                if box_status and box_status[-1] == 0.5:
-                    box_status[-1] = 0
+            box_status.append(0)
         return box_status
 
+    def live_detect_box_pattern(main_df, atr_multiplier=0.1, box_status=None):
+        ema_15 = Indicator.EMA(main_df, 15)
+        atr = Indicator.atr(main_df)
+
+        atr_threshold = atr.mean() * atr_multiplier
+        ema_diff = abs(ema_15.iloc[-1] - ema_15.iloc[-2])
+
+        if ema_diff < atr_threshold:
+            if(box_status[-2] == 0.5 or box_status[-2] == 1):
+                box_status[-1] = 1
+            else:
+                box_status[-1] = 0.5
+        else:
+            box_status[-1] = 0
+
+        return box_status
+    
     @staticmethod
     def box_pattern_init(main_df, atr_multiplier = 0.05):
         ema_15 = Indicator.EMA(main_df, 15) #1 index에 medium series가 있음

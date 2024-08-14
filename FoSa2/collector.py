@@ -5,13 +5,14 @@ import websocket as wb
 import json
 
 class CollectData:
-    def __init__(self, symbol, interval, callback=None) -> None:
+    def __init__(self, symbol, interval, callback=None, box_update=None) -> None:
         self.symbol = symbol
         self.interval = interval
         self.isClosed = None
         self.websocket_url = f"wss://fstream.binance.com/ws/{self.symbol}@kline_{self.interval}"
         self.main_df = CollectData.get_prev_data(symbol, interval)
         self.callback = callback
+        self.box_update = box_update
         self.ws = None
         websocket_thread_kline = Thread(target=self.websocket_thread_kline)
         websocket_thread_kline.start()
@@ -19,7 +20,7 @@ class CollectData:
     def on_message_kline(self, ws, message):
         data = json.loads(message)
         kline_data = data['k']
-        self.isClosed = kline_data['x']
+        isClosed = kline_data['x']
         df2 = {
             'openTime': pd.to_datetime(kline_data['t'], unit='ms'),
             'open': float(kline_data['o']),
@@ -29,10 +30,11 @@ class CollectData:
             'volume': float(kline_data['v'])
         }
         self.live_edit(df2)
-        if self.isClosed:
+        if isClosed:
             self.main_df = self.add_frame(df2)
-            self.isClosed = None
-
+            isClosed = None
+            if self.box_update:
+                self.box_update(self.main_df)
         # Call the callback function if provided
         if self.callback:
             self.callback()

@@ -5,6 +5,7 @@ import numpy as np
 from collector import CollectData
 import pandas as pd
 import websocket as wb
+import time
 from trend import PatternDetection
 from strategy import Strategy  # Ensure you have Strategy class with required methods
 from binancetrade import BinanceTrade
@@ -12,11 +13,10 @@ class Bot:
     def __init__(self) -> None:
         self.symbol = "btcusdt"
         self.box_status = self.box_initialisation("15m")
-        self.min_data_15 = CollectData(self.symbol, "15m")
         self.min_data_30 = CollectData(self.symbol, "30m")
         self.hour_data_1 = CollectData(self.symbol, "1h")
-
-        self.min_data_5 = CollectData(self.symbol, "5m", self.on_new_data)
+        self.min_data_15 = CollectData(self.symbol, "15m", box_update=self.on_new_candle_closed)
+        self.min_data_5 = CollectData(self.symbol, "5m", callback=self.on_new_data)
 
         self.binance_trade = BinanceTrade(self.symbol)
         self.binance_trade.set_leverage(15)
@@ -25,6 +25,12 @@ class Bot:
         self.print_status_thread.start()
 
         self.position_open_status = False
+        self.cooldown = False
+
+    def on_new_candle_closed(self, main_df):
+        # Update box status when a new candle closes
+        self.box_status = PatternDetection.box_is_closed(main_df, atr_multiplier=0.1, box_status=self.box_status)
+        print(f"Box Status Updated: {self.box_status}")
 
     def box_initialisation(self, interval):
         fifteen_prev = CollectData.get_prev_data(self.symbol, interval)
@@ -37,10 +43,13 @@ class Bot:
         fifteen_min_data = self.min_data_15.main_df
         is_closed = self.min_data_15.isClosed
         self.box_status = PatternDetection.live_detect_box_pattern(
-            fifteen_min_data, is_closed, atr_multiplier=0.1, box_status=self.box_status
+            fifteen_min_data, atr_multiplier=0.1, box_status=self.box_status
         )
 
     def execute_strategy(self):
+        """
+        매번 신규 데이터를 받을경우 전략 가동
+        """
         self.position_open_status = self.binance_trade.check_open_orders()
 
         if not self.is_data_initialized():
@@ -50,14 +59,26 @@ class Bot:
         df_30m = self.min_data_30.main_df
         df_1h = self.hour_data_1.main_df
         self.check_trend()
-        if not self.position_open_status:
+        if not self.position_open_status and not self.cooldown:
             if self.box_status[-1] == 0:  # Not in a box trend
                 self.position_open_status = Strategy.check_trade_signal(df_5m, df_15m, df_1h, self.binance_trade)
             else:  # In a box trend
                 self.position_open_status = Strategy.box_trend_strategy(df_5m, df_15m, df_30m, self.binance_trade)
         else:
-            self.binance_trade.close_one_order()
-            pass
+            cooldown = self.binance_trade.close_one_order()
+            if cooldown:
+                self.start_cooldown()
+
+    def start_cooldown(self):
+        self.cooldown = True
+        print("Cooldown started for 5 minutes.")
+        thread = Thread(target=self.cooldown_timer)
+        thread.start()
+
+    def cooldown_timer(self):
+        time.sleep(300)  # 300 seconds = 5 minutes
+        self.cooldown = False
+        print("Cooldown ended, trading can resume.")
 
     def on_new_data(self):
         # Execute strategy every time new data is updated
