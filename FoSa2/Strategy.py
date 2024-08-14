@@ -55,11 +55,13 @@ class Strategy:
         # Trade signal
         if long_condition:
             binancetrade.market_open_position(side="BUY", position_side="LONG", calced_quantity=quantity)
+            time.sleep(1)
             binancetrade.order_sl_tp(balance, current_price, "long" , atr_15m, quantity, atr_multiplier_tp=1.6, atr_multiplier_sl=1.35)
             print("Enter Trend Long Position")
             return True
         elif short_condition:
             binancetrade.market_open_position(side="SELL", position_side="SHORT", calced_quantity=quantity)
+            time.sleep(1)
             binancetrade.order_sl_tp(balance, current_price, "short" , atr_15m, quantity, atr_multiplier_tp=1.6, atr_multiplier_sl=1.35)
             print("Enter Trend Short Position")
             return True
@@ -104,6 +106,7 @@ class Strategy:
                 print("Enter BOX Long Position")
                 quantity, balance = binancetrade.calculate_quantity(current_price)
                 binancetrade.market_open_position(side="BUY", position_side="LONG", calced_quantity=quantity)
+                time.sleep(1)
                 binancetrade.order_sl_tp(balance, current_price, "long" ,atr_15m, quantity, atr_multiplier_tp=1.3, atr_multiplier_sl=1.1)
                 return True
 
@@ -113,6 +116,7 @@ class Strategy:
                 print("Enter BOX short Position")
                 quantity, balance = binancetrade.calculate_quantity(current_price)
                 binancetrade.market_open_position(side="SELL", position_side="SHORT", calced_quantity=quantity)
+                time.sleep(1)
                 binancetrade.order_sl_tp(balance, current_price, "short" ,atr_15m, quantity, atr_multiplier_tp=1.3, atr_multiplier_sl=1.1)
                 return True
         return False
@@ -132,12 +136,14 @@ class Strategy:
             print("Enter BOX BREAK LONG Position")
             quantity, balance = binancetrade.calculate_quantity(current_price)
             binancetrade.market_open_position(side="BUY", position_side="LONG", calced_quantity=quantity)
+            time.sleep(1)
             binancetrade.order_sl_tp(balance, current_price, "long", atr_15m, quantity, atr_multiplier_tp=1.3, atr_multiplier_sl=1.1)
             return True
         elif trend == 'short' and ema_cross_short:
             print("Enter BOX BREAK SHORT Position")
             quantity, balance = binancetrade.calculate_quantity(current_price)           
             binancetrade.market_open_position(side="SELL", position_side="SHORT", calced_quantity=quantity)
+            time.sleep(1)
             binancetrade.order_sl_tp(balance, current_price, "short", atr_15m, quantity, atr_multiplier_tp=1.3, atr_multiplier_sl=1.1)
             return True
         else:
