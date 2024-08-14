@@ -5,3 +5,14 @@
 2024-08-14 20:35:00 - Order placed: {'symbol': 'BTCUSDT', 'side': 'SELL', 'positionSide': 'LONG', 'quantity': 0.002, 'type': 'TAKE_PROFIT', 'timestamp': 1723635300655, 'close_position': True, 'stopPrice': '61451.8', 'price': '61451.8'}
 2024-08-14 20:35:00 - Order placed: {'symbol': 'BTCUSDT', 'side': 'SELL', 'positionSide': 'LONG', 'quantity': 0.002, 'type': 'STOP', 'timestamp': 1723635300796, 'close_position': True, 'stopPrice': '60918.1', 'price': '60918.1'}
 2024-08-14 20:35:00 - Opened long position at 61162.3, TP: 61451.8, SL: 60918.1
+2024-08-14 22:05:39 - Order placed: {'symbol': 'BTCUSDT', 'side': 'SELL', 'positionSide': 'SHORT', 'quantity': 0.002, 'type': 'MARKET', 'timestamp': 1723640738833}
+2024-08-14 22:05:39 - Order placed: {'symbol': 'BTCUSDT', 'side': 'BUY', 'positionSide': 'SHORT', 'quantity': 0.002, 'type': 'TAKE_PROFIT', 'timestamp': 1723640739312, 'close_position': True, 'stopPrice': '60841.5', 'price': '60841.5'}
+2024-08-14 22:05:40 - Order placed: {'symbol': 'BTCUSDT', 'side': 'BUY', 'positionSide': 'SHORT', 'quantity': 0.002, 'type': 'STOP', 'timestamp': 1723640739730, 'close_position': True, 'stopPrice': '61330.4', 'price': '61330.4'}
+2024-08-14 22:05:40 - Opened short position at 60935.6, TP: 60841.5, SL: 61330.4
+2024-08-14 22:18:15 - Order placed: {'symbol': 'BTCUSDT', 'side': 'SELL', 'positionSide': 'SHORT', 'quantity': 0.002, 'type': 'MARKET', 'timestamp': 1723641494976}
+2024-08-14 22:18:15 - Order placed: {'symbol': 'BTCUSDT', 'side': 'BUY', 'positionSide': 'SHORT', 'quantity': 0.002, 'type': 'TAKE_PROFIT', 'timestamp': 1723641495409, 'close_position': True, 'stopPrice': '60625.7', 'price': '60625.7'}
+2024-08-14 22:18:16 - Order placed: {'symbol': 'BTCUSDT', 'side': 'BUY', 'positionSide': 'SHORT', 'quantity': 0.002, 'type': 'STOP', 'timestamp': 1723641495768, 'close_position': True, 'stopPrice': '61138.5', 'price': '61138.5'}
+2024-08-14 22:18:16 - Opened short position at 60720.1, TP: 60625.7, SL: 61138.5
+2024-08-14 22:39:12 - Order placed: {'symbol': 'BTCUSDT', 'side': 'SELL', 'positionSide': 'SHORT', 'quantity': 0.002, 'type': 'MARKET', 'timestamp': 1723642752334}
+2024-08-14 22:39:13 - Order placed: {'symbol': 'BTCUSDT', 'side': 'BUY', 'positionSide': 'SHORT', 'quantity': 0.002, 'type': 'STOP', 'timestamp': 1723642753007, 'close_position': True, 'stopPrice': '61365.4', 'price': '61365.4'}
+2024-08-14 22:39:13 - Opened short position at 60924.3, TP: 60828.6, SL: 61365.4
