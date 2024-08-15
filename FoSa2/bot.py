@@ -16,7 +16,7 @@ class Bot:
         self.min_data_30 = CollectData(self.symbol, "30m")
         self.hour_data_1 = CollectData(self.symbol, "1h")
         self.min_data_15 = CollectData(self.symbol, "15m", box_update=self.on_new_candle_closed)
-        self.min_data_5 = CollectData(self.symbol, "5m", callback=self.on_new_data)
+        self.min_data_5 = CollectData(self.symbol, "5m", callback=self.execute_strategy)
 
         self.binance_trade = BinanceTrade(self.symbol)
         self.binance_trade.set_leverage(15)
@@ -41,7 +41,6 @@ class Bot:
         if not self.is_data_initialized():
             return
         fifteen_min_data = self.min_data_15.main_df
-        is_closed = self.min_data_15.isClosed
         self.box_status = PatternDetection.live_detect_box_pattern(
             fifteen_min_data, atr_multiplier=0.1, box_status=self.box_status
         )
@@ -79,10 +78,6 @@ class Bot:
         time.sleep(300)  # 300 seconds = 5 minutes
         self.cooldown = False
         print("Cooldown ended, trading can resume.")
-
-    def on_new_data(self):
-        # Execute strategy every time new data is updated
-        self.execute_strategy()
 
     def is_data_initialized(self):
         # Check if all the data frames are initialized and have data
