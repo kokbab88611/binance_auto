@@ -3,6 +3,8 @@ from binance.um_futures import UMFutures
 from binance.error import ClientError
 import time
 from datetime import datetime
+from alarm import TelegramFosa
+import asyncio
 
 class BinanceTrade:
     def __init__(self, symbol):
@@ -13,6 +15,7 @@ class BinanceTrade:
         self.symbol = symbol
         self.leverage = None
         self.log_file = f"{symbol}_trade_log.txt"  # Log file named after the symbol
+        self.tele_alarm = TelegramFosa()
 
     def market_open_position(self, side, position_side, calced_quantity):
         self.order(symbol=self.symbol.upper(), side=side, position_side=position_side, quantity=calced_quantity)
@@ -50,6 +53,7 @@ class BinanceTrade:
             self.order(symbol=self.symbol.upper(), side="BUY", position_side="SHORT", quantity=calced_quantity, order_type="STOP", price=sl_price, stop_price=sl_price, close_position=True)
         
         self.log_trade(f"Opened {position} position at {entry_price}, TP: {take_profit_price}, SL: {sl_price}")
+        asyncio.run(self.tele_alarm.message(f"{position} 포지션 {entry_price}에 열림\n목표가: {take_profit_price}\n손절가: {sl_price}"))
 
     def get_symbol_info(self, symbol: str):
         exchange_info = self.client.exchange_info()
@@ -109,6 +113,7 @@ class BinanceTrade:
             response = self.client.new_order(**params)
             print(f"Order placed: {response}")
             self.log_trade(f"Order placed: {params}")
+            
             return response
 
         except ClientError as e:
