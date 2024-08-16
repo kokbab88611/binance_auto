@@ -58,6 +58,7 @@ class Bot:
         df_30m = self.min_data_30.main_df
         df_1h = self.hour_data_1.main_df
         self.check_trend()
+        print(not self.position_open_status and not self.cooldown)
         if not self.position_open_status and not self.cooldown:
             if self.box_status[-1] == 0:  # Not in a box trend
                 self.position_open_status = Strategy.check_trade_signal(df_5m, df_15m, df_1h, self.binance_trade)

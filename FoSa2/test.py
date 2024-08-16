@@ -57,6 +57,8 @@ class Strategy:
         # Evaluate scenarios 
         long_condition = any(long_scenarios)
         short_condition = any(short_scenarios)
+        print(f"long condition {long_condition}")
+        print(f"short condition {short_condition}")
 
     @staticmethod
     def box_trend_strategy(df_5m, df_15m, df_30m):
@@ -140,8 +142,6 @@ if __name__ == "__main__":
     # Test check_trade_signal
     print("Testing check_trade_signal...")
     trade_signal_result = Strategy.check_trade_signal(df_5m, df_15m, df_1h)
-    print(f"Trade Signal Result: {trade_signal_result}")
-
     # Test box_trend_strategy
     print("Testing box_trend_strategy...")
     box_strategy_result = Strategy.box_trend_strategy(df_5m, df_15m, df_30m)
