@@ -76,7 +76,7 @@ class BinanceTrade:
 
     def calculate_quantity(self, price):
         available_balance = self.fetch_balance()
-        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.95, 3)
+        max_quantity = round((((available_balance * (1 - (self.leverage * 0.005))) * self.leverage) / price) * 0.92, 3)
         return max_quantity, available_balance
 
     def set_leverage(self, leverage):
