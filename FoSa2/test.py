@@ -77,12 +77,9 @@ class Strategy:
         atr_5m = Indicator.atr(df_5m).iat[-1]
         atr_15m = Indicator.atr(df_15m).iat[-1]
         
-        if (current_price > resistance_mean + atr_5m) and (current_price > recent_high_30):
-            position_opened = Strategy.box_breakout('long', df_5m, df_15m, atr_15m, current_price, binancetrade)
-            return position_opened
-        elif (current_price < support_mean - atr_5m) and (current_price < recent_low_30):
-            position_opened = Strategy.box_breakout('short', df_5m, df_15m, atr_15m, current_price, binancetrade)
-            return position_opened
+        print(f"support mean: {support_mean}")
+        print(f"support mean: {resistance_mean}")
+        print(f"BOX RESISTANCE ema_9 cross over 15: {ema_9.iat[-1] > ema_15.iat[-1] and ema_9.iat[-2] <= ema_15.iat[-2]}")
 
         if support_mean <= current_price <= resistance_mean:
             if ema_9.iat[-1] > ema_15.iat[-1] and ema_9.iat[-2] <= ema_15.iat[-2]:
@@ -101,7 +98,7 @@ class Strategy:
         balance = binancetrade.fetch_balance()
         ema_cross_long = ema_9.iat[-1] > ema_15.iat[-1] and ema_9.iat[-2] <= ema_15.iat[-2]
         ema_cross_short = ema_9.iat[-1] < ema_15.iat[-1] and ema_9.iat[-2] >= ema_15.iat[-2]
-
+        print(f"BOX BREAK ema_9 cross over 15: {ema_9.iat[-1] > ema_15.iat[-1] and ema_9.iat[-2] <= ema_15.iat[-2]}")
         if trend == 'long' and ema_cross_long:
             print("Enter BOX BREAK LONG Position")
             quantity, balance = binancetrade.calculate_quantity(current_price)
