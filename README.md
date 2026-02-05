@@ -23,14 +23,14 @@ This bot monitors BTC/USDT futures on 3-minute timeframes and executes trades ba
 
 ```
 binance_auto/
-├── config.py              # Trading parameters and API settings
-├── main.py                # Entry point
-├── requirements.txt       # Dependencies
+├── config.py           # Trading parameters and API settings
+├── main.py             # Entry point
+├── requirements.txt    # Dependencies
 └── src/
-    ├── bot.py            # Main trading logic
-    ├── client.py         # Binance API wrapper
-    ├── strategy.py       # Technical indicators
-    └── ml_models.py      # ML prediction model
+    ├── bot.py         # Main trading logic
+    ├── client.py      # Binance API wrapper
+    ├── strategy.py    # Technical indicators
+    └── ml_models.py   # ML prediction model
 ```
 
 ## Setup
@@ -58,6 +58,16 @@ python main.py
 3. **ML Prediction**: Logistic Regression trained on recent candles to predict bullish/bearish trend
 4. **Signal Generation**: All conditions must align (momentum + trend + ML + volatility filter)
 5. **Order Execution**: Market orders placed with 25x leverage, managed with fixed TP/SL
+
+## Post-Merge Cleanup
+
+After merging this refactored version, remove old experimental folders:
+
+```bash
+git rm -r LosAlamos "FoSa1(foresight)" FoSa2 testing_ai testing_strat pre_development calculation actual_trade
+git commit -m "Remove experimental folders"
+git push
+```
 
 ## Goal
 
