@@ -1,0 +1,9 @@
+__pycache__/
+*.log
+*.txt
+*.pkl
+.env
+.vscode/
+.DS_Store
+*.csv
+src/__pycache__/
