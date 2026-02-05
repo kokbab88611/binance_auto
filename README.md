@@ -23,14 +23,14 @@ This bot monitors BTC/USDT futures on 3-minute timeframes and executes trades ba
 
 ```
 binance_auto/
-├── config.py              # Trading parameters and API settings
-├── main.py                # Entry point
-├── requirements.txt       # Dependencies
+├── config.py           # Trading parameters and API settings
+├── main.py             # Entry point
+├── requirements.txt    # Dependencies
 └── src/
-    ├── bot.py            # Main trading logic
-    ├── client.py         # Binance API wrapper
-    ├── strategy.py       # Technical indicators
-    └── ml_models.py      # ML prediction model
+    ├── bot.py         # Main trading logic
+    ├── client.py      # Binance API wrapper
+    ├── strategy.py    # Technical indicators
+    └── ml_models.py   # ML prediction model
 ```
 
 ## Setup
