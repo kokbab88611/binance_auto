@@ -3,67 +3,48 @@ import numpy as np
 import pandas as pd
 
 class TechnicalStrategy:
-    """
-    Handles technical analysis indicators. 
-    Using standard EMA 8/14 crossover strategy combined with StochRSI for momentum.
-    """
-    
     @staticmethod
-    def get_ema_signals(df, close_col='Close'):
-        # using EMA 8 and 14 for fast reaction to crypto volatility
-        # standard 9/21 might be too slow for 3m timeframe
-        close = df[close_col]
-        
-        ema_fast = ta.trend.EMAIndicator(close, window=8).ema_indicator()
-        ema_slow = ta.trend.EMAIndicator(close, window=14).ema_indicator()
-        
-        # We only need the tail to check for recent crossovers
-        return ema_slow.tail(5).tolist(), ema_fast.tail(5).tolist()
+    def EMA(df):
+        ema_fourteen = ta.trend.EMAIndicator(df['Close'], window=14)
+        ema_eight = ta.trend.EMAIndicator(df['Close'], window=8)
+        ema_fourteen_indicator = ema_fourteen.ema_indicator()
+        ema_eight_indicator = ema_eight.ema_indicator()
+        ema_fourteen_list = (ema_fourteen_indicator.tail(5)).tolist()
+        ema_eight_list = (ema_eight_indicator.tail(5)).tolist()
+        return ema_fourteen_list, ema_eight_list
 
     @staticmethod
-    def check_volatility_bands(df, high_col='High', low_col='Low'):
-        # Bollinger Bands (20, 2)
-        # If price touches bands, we might be overextended
-        highs = pd.to_numeric(df[high_col], errors='coerce')
-        lows = pd.to_numeric(df[low_col], errors='coerce')
-        
-        bhi = ta.volatility.bollinger_hband_indicator(highs, window=20)
-        bli = ta.volatility.bollinger_lband_indicator(lows, window=20)
-        
-        # Check last 3 candles
-        recent_bhi = np.array(bhi.tail(3).tolist()).astype('int')
-        recent_bli = np.array(bli.tail(3).tolist()).astype('int')
-        
-        # Signal filtering
-        if 1 in recent_bhi:
-            return "no_long"  # Touched upper band, danger of reversal
-        elif 1 in recent_bli:
-            return "no_short" # Touched lower band, danger of bounce
-        return "safe"
+    def peak_check(df):
+        df['High'] = pd.to_numeric(df['High'], errors='coerce')
+        df['Low'] = pd.to_numeric(df['Low'], errors='coerce')
+        bhi = ta.volatility.bollinger_hband_indicator(df['High'], window=20)
+        bli = ta.volatility.bollinger_lband_indicator(df['Low'], window=20)
+        bhi = np.array(bhi.tail(3).tolist())
+        bli = np.array(bli.tail(3).tolist())
+        bhi = bhi.astype('int')
+        bli = bli.astype('int')
+        if 1 in bhi:
+            return "nl"
+        elif 1 in bli:
+            return "ns"
+        else:
+            return "safe"
 
     @staticmethod
-    def get_momentum(df, close_col='Close'):
-        # StochRSI (14) for identifying overbought/oversold conditions
-        close = pd.to_numeric(df[close_col], errors='coerce')
-        rsi = ta.momentum.StochRSIIndicator(close, window=14)
-        
-        # D is signal line, K is fast line
-        return rsi.stochrsi_d().tail(2).tolist(), rsi.stochrsi_k().tail(2).tolist()
+    def stochRSI(df):
+        df_close = pd.to_numeric(df['Close'], errors='coerce')
+        rsi = ta.momentum.StochRSIIndicator(df_close, window=14)
+        d = rsi.stochrsi_d()
+        k = rsi.stochrsi_k()
+        d_two = d.tail(2).tolist()
+        k_two = k.tail(2).tolist()
+        return d_two, k_two
 
     @staticmethod
-    def is_market_safe(high_list, low_list):
-        # Pump protection: avoid entering if previous candle was massive (>1%)
-        if len(high_list) < 2: return True
-            
-        prev_high = float(high_list[-2])
-        prev_low = float(low_list[-2])
-        
-        if prev_low == 0: return True 
-        
-        volatility = (prev_high - prev_low) / prev_low
-        
-        # 1% move in 3m is huge for BTC, likely chop/manipulation follows
-        if abs(volatility) >= 0.01:
+    def danger_check(high, low):
+        prev_high, prev_low = float(high[-2]), float(low[-2]) 
+        prev_percentage_change = (prev_high-prev_low)/prev_low
+        if abs(prev_percentage_change) >= 0.01:
             return False
-            
-        return True
+        else:
+            return True
