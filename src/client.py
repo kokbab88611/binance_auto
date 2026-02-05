@@ -5,47 +5,34 @@ import config
 
 class BinanceClient:
     def __init__(self):
-        self.client = UMFutures(key=config.API_KEY, secret=config.SECRET_KEY)
+        self.um_futures_client = UMFutures(key=config.API_KEY, secret=config.SECRET_KEY)
 
-    def change_leverage(self, symbol, leverage):
+    def change_leverage(self, leverage):
         try:
-            response = self.client.change_leverage(symbol=symbol, leverage=leverage)
-            logging.info(f"Leverage changed: {response}")
-            return response
+            response = self.um_futures_client.change_leverage(symbol=config.SYMBOL, leverage=leverage)
+            logging.info(response)
         except ClientError as error:
-            logging.error(f"Error changing leverage: {error.status_code} - {error.error_message}")
-            return None
+            logging.error(f"Error: {error.status_code} Code: {error.error_code} Message: {error.error_message}")
 
     def get_balance(self):
         try:
-            response = self.client.balance()
-            # Find USDT balance
-            balance_data = next((x for x in response if x['asset'] == "USDT"), None)
-            if balance_data:
-                balance = float(balance_data['balance'])
-                # Using 90% of available balance as per original logic
-                return balance * 0.9
-            return 0.0
+            response = self.um_futures_client.balance()
+            balance = float(next(x for x in response if x['asset'] == "USDT")['balance'])
+            return balance * 0.9
         except ClientError as error:
-            logging.error(f"Error getting balance: {error.status_code} - {error.error_message}")
+            logging.error(f"Error: {error.status_code} Code: {error.error_code} Message: {error.error_message}")
             return 0.0
     
-    def place_order(self, symbol, side, reduce_only, quantity):
-        """
-        Place a MARKET order.
-        side: 'BUY' or 'SELL'
-        """
+    def place_order(self, symbol, side, reduceOnly, quantity):
         try:
             quantity = float(round(quantity, 3))
-            response = self.client.new_order(
+            response = self.um_futures_client.new_order(
                 symbol=symbol,
                 side=side,
                 type="MARKET",
                 quantity=quantity,
-                reduceOnly=reduce_only, 
+                reduceOnly=reduceOnly,
             )
-            logging.info(f"Order placed: {response}")
-            return response
+            print(response)
         except ClientError as error:
-            logging.error(f"Error placing order: {error.status_code} - {error.error_message}")
-            return None
+            logging.error(f"Error: {error.status_code} Code: {error.error_code} Message: {error.error_message}")
