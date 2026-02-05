@@ -2,38 +2,38 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-class PredictionModel:
+class TrendPredictor:
     def __init__(self):
+        # Starting with Logistic Regression for baseline
+        # TODO: Experiment with XGBoost for better non-linear capture
+        # TODO: Add hyperparameter tuning grid
         self.model = LogisticRegression(max_iter=1000)
     
-    def predict_trend(self, df):
+    def predict(self, df):
         """
-        Predicts whether the next trend is 'bullish' or 'bearish' 
-        using Logistic Regression on Close price and Volume.
+        Binary classification of trend (bullish/bearish).
+        Uses simple features (Close, Volume) for now.
         """
-        # Prepare data
-        df_subset = df[['Close', 'Volume', 'Category']].dropna()
-        
-        if len(df_subset) < 20: # Need enough data points
+        # Need at least 20 candles to fit meaningful trend
+        subset = df[['Close', 'Volume', 'Category']].dropna()
+        if len(subset) < 20: 
             return None
             
-        X = df_subset[['Close', 'Volume']]
-        y = df_subset['Category']
+        X = subset[['Close', 'Volume']]
+        y = subset['Category']
         
-        # Split data
+        # Standard train/test split to validate accuracy before live inference
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
+            X, y, test_size=0.2, shuffle=False # Don't shuffle time series!
         )
         
-        # Train model
         self.model.fit(X_train, y_train)
         
-        # Predict on the latest data point available in the test set 
-        # (In a real scenario, this should be the live current candle)
-        X_new = X_test.tail(1) 
+        # Predict on the live candle (last row)
+        current_features = X_test.tail(1) 
         
-        if X_new.empty:
+        if current_features.empty:
             return None
             
-        prediction = self.model.predict(X_new)
+        prediction = self.model.predict(current_features)
         return prediction[0]
