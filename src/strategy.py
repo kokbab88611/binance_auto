@@ -3,62 +3,67 @@ import numpy as np
 import pandas as pd
 
 class TechnicalStrategy:
+    """
+    Handles technical analysis indicators. 
+    Using standard EMA 8/14 crossover strategy combined with StochRSI for momentum.
+    """
+    
     @staticmethod
-    def calculate_ema(df, close_col='Close'):
-        close_series = df[close_col]
+    def get_ema_signals(df, close_col='Close'):
+        # using EMA 8 and 14 for fast reaction to crypto volatility
+        # standard 9/21 might be too slow for 3m timeframe
+        close = df[close_col]
         
-        # Calculate EMAs
-        ema_fourteen = ta.trend.EMAIndicator(close_series, window=14)
-        ema_eight = ta.trend.EMAIndicator(close_series, window=8)
+        ema_fast = ta.trend.EMAIndicator(close, window=8).ema_indicator()
+        ema_slow = ta.trend.EMAIndicator(close, window=14).ema_indicator()
         
-        # Get indicators
-        ema_14_indicator = ema_fourteen.ema_indicator()
-        ema_8_indicator = ema_eight.ema_indicator()
-        
-        # Return last 5 values as list
-        return ema_14_indicator.tail(5).tolist(), ema_8_indicator.tail(5).tolist()
+        # We only need the tail to check for recent crossovers
+        return ema_slow.tail(5).tolist(), ema_fast.tail(5).tolist()
 
     @staticmethod
-    def check_bollinger_bands(df, high_col='High', low_col='Low'):
-        high_series = pd.to_numeric(df[high_col], errors='coerce')
-        low_series = pd.to_numeric(df[low_col], errors='coerce')
+    def check_volatility_bands(df, high_col='High', low_col='Low'):
+        # Bollinger Bands (20, 2)
+        # If price touches bands, we might be overextended
+        highs = pd.to_numeric(df[high_col], errors='coerce')
+        lows = pd.to_numeric(df[low_col], errors='coerce')
         
-        bhi = ta.volatility.bollinger_hband_indicator(high_series, window=20)
-        bli = ta.volatility.bollinger_lband_indicator(low_series, window=20)
+        bhi = ta.volatility.bollinger_hband_indicator(highs, window=20)
+        bli = ta.volatility.bollinger_lband_indicator(lows, window=20)
         
-        bhi_values = np.array(bhi.tail(3).tolist()).astype('int')
-        bli_values = np.array(bli.tail(3).tolist()).astype('int')
+        # Check last 3 candles
+        recent_bhi = np.array(bhi.tail(3).tolist()).astype('int')
+        recent_bli = np.array(bli.tail(3).tolist()).astype('int')
         
-        if 1 in bhi_values:
-            return "nl" # no long
-        elif 1 in bli_values:
-            return "ns" # no short
-        else:
-            return "safe"
+        # Signal filtering
+        if 1 in recent_bhi:
+            return "no_long"  # Touched upper band, danger of reversal
+        elif 1 in recent_bli:
+            return "no_short" # Touched lower band, danger of bounce
+        return "safe"
 
     @staticmethod
-    def calculate_stoch_rsi(df, close_col='Close'):
-        close_series = pd.to_numeric(df[close_col], errors='coerce')
-        rsi = ta.momentum.StochRSIIndicator(close_series, window=14)
-        d = rsi.stochrsi_d()
-        k = rsi.stochrsi_k()
+    def get_momentum(df, close_col='Close'):
+        # StochRSI (14) for identifying overbought/oversold conditions
+        close = pd.to_numeric(df[close_col], errors='coerce')
+        rsi = ta.momentum.StochRSIIndicator(close, window=14)
         
-        return d.tail(2).tolist(), k.tail(2).tolist()
+        # D is signal line, K is fast line
+        return rsi.stochrsi_d().tail(2).tolist(), rsi.stochrsi_k().tail(2).tolist()
 
     @staticmethod
-    def check_danger(high_list, low_list):
-        if len(high_list) < 2 or len(low_list) < 2:
-            return True
+    def is_market_safe(high_list, low_list):
+        # Pump protection: avoid entering if previous candle was massive (>1%)
+        if len(high_list) < 2: return True
             
         prev_high = float(high_list[-2])
         prev_low = float(low_list[-2])
         
-        if prev_low == 0: return True # Avoid division by zero
+        if prev_low == 0: return True 
         
-        prev_percentage_change = (prev_high - prev_low) / prev_low
+        volatility = (prev_high - prev_low) / prev_low
         
-        # If change is greater than or equal to 1%, consider it dangerous (volatility check)
-        if abs(prev_percentage_change) >= 0.01:
+        # 1% move in 3m is huge for BTC, likely chop/manipulation follows
+        if abs(volatility) >= 0.01:
             return False
-        else:
-            return True
+            
+        return True
