@@ -2,38 +2,21 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-class TrendPredictor:
+class PredictionModel:
     def __init__(self):
-        # Starting with Logistic Regression for baseline
-        # TODO: Experiment with XGBoost for better non-linear capture
-        # TODO: Add hyperparameter tuning grid
         self.model = LogisticRegression(max_iter=1000)
     
-    def predict(self, df):
-        """
-        Binary classification of trend (bullish/bearish).
-        Uses simple features (Close, Volume) for now.
-        """
-        # Need at least 20 candles to fit meaningful trend
-        subset = df[['Close', 'Volume', 'Category']].dropna()
-        if len(subset) < 20: 
-            return None
-            
-        X = subset[['Close', 'Volume']]
-        y = subset['Category']
-        
-        # Standard train/test split to validate accuracy before live inference
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, shuffle=False # Don't shuffle time series!
+    async def predict_trend(self, df):
+        X_train_category, X_test_category, y_train_category, y_test_category = train_test_split(
+            df[['Close', 'Volume']], df['Category'],
+            test_size=0.2, random_state=42
         )
-        
-        self.model.fit(X_train, y_train)
-        
-        # Predict on the live candle (last row)
-        current_features = X_test.tail(1) 
-        
-        if current_features.empty:
-            return None
-            
-        prediction = self.model.predict(current_features)
-        return prediction[0]
+        df_train_category = pd.concat([X_train_category, y_train_category], axis=1).dropna()
+        X_train_category = df_train_category.iloc[:, :-1]
+        y_train_category = df_train_category.iloc[:, -1]
+
+        self.model.fit(X_train_category, y_train_category)
+
+        X_new_category = X_test_category.tail(1)
+        predicted_category = self.model.predict(X_new_category)
+        return predicted_category[0]
